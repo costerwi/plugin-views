@@ -2,6 +2,7 @@
 
 import abaqusConstants
 from xml.dom import minidom
+from xml.utils import iso8601 # date/time support
 
 def saveRepository(xmlElement, repository):
     xmlElement.setAttribute('type', 'Repository')
@@ -45,6 +46,51 @@ def saveViewCut(xmlElement, viewCut):
         savexml(attrElement, getattr(viewCut, attr))
 
 
+
+def addLeaf(xmlElement, key, value=None, attrs={}):
+    leaf = xmlElement.ownerDocument.createElement(key)
+    if value:
+        leaf.appendChild(
+            xmlElement.ownerDocument.createTextNode(repr(value)))
+    for k, v in attrs.items():
+        leaf.setAttribute(k, v)
+    return xmlElement.appendChild(leaf)
+
+
+def savePlotStateOptions(xmlElement, odbDisplay):
+    plotState = odbDisplay.display.plotState
+    if DEFORMED in plotState or \
+            CONTOURS_ON_DEF in plotState or \
+            SYMBOLS_ON_DEF in plotState or \
+            ORIENT_ON_DEF in plotState:
+        deformedVariable = odbDisplay.deformedVariable[0]
+        if len(deformedVariable):
+            cmdElement = addLeaf(xmlElement, 'setDeformedVariable')
+            addLeaf(cmdElement, 'variableLabel', deformedVariable, {'type': 'argument'})
+    if CONTOURS_ON_UNDEF in plotState or \
+            CONTOURS_ON_DEF in plotState:
+        primVar = odbDisplay.primaryVariable
+        if len(primVar[0]):
+            varPos = [ UNDEFINED_POSITION, NODAL, INTEGRATION_POINT, ELEMENT_FACE, 
+                ELEMENT_NODAL, WHOLE_ELEMENT, ELEMENT_CENTROID, WHOLE_REGION, 
+                WHOLE_PART_INSTANCE, WHOLE_MODEL, GENERAL_PARTICLE ][primVar[1]]
+            cmdElement = addLeaf(xmlElement, 'setPrimaryVariable')
+            addLeaf(cmdElement, 'variableLabel', primVar[0], {'type': 'argument'})
+            addLeaf(cmdElement, 'outputPosition', varPos, {'type': 'argument'})
+            if primVar[4]:
+                refType = [ NO_REFINEMENT, INVARIANT, COMPONENT ][primVar[4]]
+                addLeaf(cmdElement, 'refinement',
+                        (refType, primVar[5]), {'type': 'argument'})
+        savexml(addLeaf(xmlElement, 'contourOptions'), odbDisplay.contourOptions)
+    if SYMBOLS_ON_UNDEF in plotState or \
+            SYMBOLS_ON_DEF in plotState or \
+            ORIENT_ON_UNDEF in plotState or \
+            ORIENT_ON_DEF in plotState:
+        savexml(addLeaf(xmlElement, 'symbolOptions'), odbDisplay.symbolOptions)
+    if len(plotState) > 1:
+        savexml(addLeaf(xmlElement, 'superimposeOptions'), odbDisplay.superimposeOptions)
+            
+
 def saveActiveViewCut(xmlElement, abaqusObject):
     viewCutNames=[]
     for viewCut in abaqusObject.viewCuts.values():
@@ -66,16 +112,22 @@ def saveActiveViewCut(xmlElement, abaqusObject):
             xmlElement.ownerDocument.createTextNode('OFF'))
     xmlElement.appendChild(vc)
 
-
+def saveWindowState(xmlElement, viewport):
+    if MAXIMIZED == viewport.windowState:
+        xmlElement.appendChild(xmlElement.ownerDocument.createElement('maximize'))
+    elif MINIMIZED == viewport.windowState:
+        xmlElement.appendChild(xmlElement.ownerDocument.createElement('minimize'))
+    elif NORMAL == viewport.windowState:
+        xmlElement.appendChild(xmlElement.ownerDocument.createElement('restore'))
     
 
 odbDisplay = session.viewports.values()[0].odbDisplay
 
 attrs = {
-    ViewportType: ['origin', 'width', 'height', 
+    ViewportType: [saveWindowState, 'origin', 'width', 'height', 
         'viewportAnnotationOptions', 'view', 'odbDisplay'],
     ViewType: ['width', 'cameraTarget', 'cameraPosition', 'cameraUpVector'],
-    type(odbDisplay): ['commonOptions', 'contourOptions', 'display',
+    type(odbDisplay): ['display', savePlotStateOptions, 'commonOptions',
         saveActiveViewCut ],
     type(session.viewports): [ saveRepository ],   # Repository type
     type(odbDisplay.viewCuts.values()[0]): [ saveViewCut ],
@@ -113,19 +165,20 @@ def savexml(xmlElement, abaqusObject):
             xmlElement.ownerDocument.createTextNode(repr(abaqusObject)))
         
 impl = minidom.getDOMImplementation()
-xmldoc = impl.createDocument(None, "printviews", None)
-top_element = xmldoc.documentElement
+xmldoc = impl.createDocument(None, "userViews", None)
 
-printElement = xmldoc.createElement('print')
-printElement.setAttribute('name', 'xyzsdfdf.png')
-xmldoc.documentElement.appendChild(printElement)
+userview = addLeaf(xmldoc.documentElement, 'userView')
+userview.setAttribute('name', 'xyzsdfdf.png')
+userview.setAttribute('abaqusViewer',
+        '%s.%s-%s'%(majorVersion, minorVersion, updateVersion))
+now = iso8601.time.time()
+userview.setAttribute('dateTime', iso8601.tostring(now))
 
-vpElement = xmldoc.createElement('Viewport')
-printElement.appendChild(vpElement)
+vpElement = addLeaf(userview, 'Viewport')
 
 savexml(vpElement, session.viewports.values()[0])
 
-f = open('test.xml', 'w')
+f = open('userViews.xml', 'w')
 f.write(xmldoc.toprettyxml())
 f.close()
 

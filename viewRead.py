@@ -1,52 +1,55 @@
+# $Id$
 
 from abaqusConstants import *
 from xml.dom import minidom
 
-
-
-def setView(xmlElement, abaqusObject):
+def getLeaf(xmlElement, abaqusObject):
     if callable(abaqusObject):
         arguments=dict([ (str(key), str(value))
             for key, value in xmlElement.attributes.items() ])
         for xmlChild in xmlElement.childNodes:
             if xmlChild.ELEMENT_NODE == xmlChild.nodeType and \
                     xmlChild.getAttribute('type') == u'argument':
-                        arguments[str(xmlChild.tagName)] = eval(setView(xmlChild, None))
+                        arguments[str(xmlChild.tagName)] = eval(getLeaf(xmlChild, None))
         try:
             abaqusObject = abaqusObject(**arguments)
-        except TypeError:
-            abaqusObject = abaqusObject(name=arguments['name'])
+        except TypeError, msg:
+            print repr(abaqusObject), msg
+            if arguments.has_key('name'):
+                abaqusObject = abaqusObject(name=arguments['name'])
+        except VisError, msg:
+            print repr(abaqusObject), msg
 
     setValues = {}
     text = ''
     for xmlChild in xmlElement.childNodes:
         if xmlChild.ELEMENT_NODE == xmlChild.nodeType and \
-                xmlChild.getAttribute('type') != u'argument':
-                    abaqusChild = None
-                    if hasattr(abaqusObject, xmlChild.tagName):
-                        abaqusChild = getattr(abaqusObject, xmlChild.tagName)
-                    value = setView(xmlChild, abaqusChild)
-                    if len(value):
-                        setValues[str(xmlChild.tagName)] = eval(value)
+            not len(xmlChild.getAttribute('type')):
+                abaqusChild = getattr(abaqusObject, xmlChild.tagName, None)
+                value = getLeaf(xmlChild, abaqusChild)
+                if len(value):
+                    setValues[str(xmlChild.tagName)] = eval(value)
         elif xmlChild.TEXT_NODE == xmlChild.nodeType:
             text += xmlChild.data
 
-    if len(setValues):
+    if len(setValues) and hasattr(abaqusObject, 'setValues'):
         abaqusObject.setValues(**setValues)
 
     return text.strip()
 
 
-dom = minidom.parse('test.xml')
-assert dom.documentElement.tagName == 'printviews'
+def setView(xmlUserView):
+    vps = xmluserView.getElementsByTagName('Viewport')
+    if len(vps) > 1:
+        for vpElement in vps:
+            getLeaf(vpElement, session) # will create and edit viewports
+    else:
+        vpElement = vps[0]
+        vpObject = session.viewports.values()[0]  # current viewport
+        getLeaf(vpElement, vpObject)
 
-p = dom.getElementsByTagName('print')[-1]
-vps = p.getElementsByTagName('Viewport')
-if len(vps) > 1:
-    for vpElement in vps:
-        vpObject = session.Viewport(name=str(vpElement.getAttribute('name')))
-        setView(vpElement, vpObject)
-else:
-    vpElement = vps[0]
-    vpObject = session.viewports.values()[0]
-    setView(vpElement, vpObject)
+
+dom = minidom.parse('userViews.xml')
+assert dom.documentElement.tagName == 'userViews'
+setView(dom.getElementsByTagName('userView')[-1]) # find the last userView
+
