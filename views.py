@@ -1,20 +1,7 @@
+# $Id$
 from abaqus import *
 from abaqusConstants import *
 import Numeric
-import viewsCommon
-
-def printToFileCallback(callingObject, args, kws, user):
-    vp=session.viewports[session.currentViewportName]
-    o = open(viewsCommon.printFileName, 'a')
-    if vp.displayedObject:
-        print >>o, vp.displayedObject.name
-    print >>o, "%s;%s"%(kws['fileName'], viewsCommon.viewData(vp.view))
-    
-def registerCallback():
-    import methodCallback
-    print 'views.py registerCallback'
-    methodCallback.addCallback(type(session), 'printToFile', 
-            printToFileCallback)
 
 def norm(v):
     " Vector length as in Matlab "

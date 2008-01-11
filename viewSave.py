@@ -1,34 +1,46 @@
 # $Id$
 
-import abaqusConstants
+import viewsCommon
+import abaqus
+from abaqusConstants import *
+import customKernel # for registered list of userViews
+import os
 from xml.dom import minidom
 from xml.utils import iso8601 # date/time support
 
-def saveRepository(xmlElement, repository):
-    xmlElement.setAttribute('type', 'Repository')
-    if len(repository):
-        itemType = str(type(repository.values()[0]))[7:-2]
-    for name, item in repository.items():
-        itemElement = xmlElement.ownerDocument.createElement(itemType)
-        xmlElement.appendChild(itemElement)
-        savexml(itemElement, item)
+xmldoc = None
+odbDisplay = abaqus.session.viewports.values()[0].odbDisplay
+
+###############################################################################
+# Functions to save a view in the database
+###############################################################################
+
+def addLeaf(xmlElement, key, value=None, attrs={}):
+    leaf = xmlElement.ownerDocument.createElement(key)
+    if value:
+        leaf.appendChild(
+            xmlElement.ownerDocument.createTextNode(repr(value)))
+    for k, v in attrs.items():
+        leaf.setAttribute(k, v)
+    return xmlElement.appendChild(leaf)
+
 
 def saveViewCut(xmlElement, viewCut):
     arguments = ['shape']
     members = ['showModelAboveCut', 'showModelOnCut', 'showModelBelowCut']
-    if abaqusConstants.PLANE == viewCut.shape:
+    if PLANE == viewCut.shape:
         arguments += ['normal', 'axis2']
         members.append('motion')
-        if abaqusConstants.TRANSLATE == viewCut.motion:
+        if TRANSLATE == viewCut.motion:
             members.append('position')
-        elif abaqusConstants.ROTATE == viewCut.motion:
+        elif ROTATE == viewCut.motion:
             members += ['rotationAxis', 'angle']
-    elif abaqusConstants.CYLINDER == viewCut.shape:
+    elif CYLINDER == viewCut.shape:
         arguments.append('cylinderAxis')
         members.append('radius')
-    elif abaqusConstants.SPHERE == viewCut.shape:
+    elif SPHERE == viewCut.shape:
         members.append('radius')
-    if abaqusConstants.ISOSURFACE == viewCut.shape:
+    if ISOSURFACE == viewCut.shape:
         members.append('value')
     else:
         if len(viewCut.csysName):
@@ -44,17 +56,6 @@ def saveViewCut(xmlElement, viewCut):
         attrElement = xmlElement.ownerDocument.createElement(attr)
         xmlElement.appendChild(attrElement)
         savexml(attrElement, getattr(viewCut, attr))
-
-
-
-def addLeaf(xmlElement, key, value=None, attrs={}):
-    leaf = xmlElement.ownerDocument.createElement(key)
-    if value:
-        leaf.appendChild(
-            xmlElement.ownerDocument.createTextNode(repr(value)))
-    for k, v in attrs.items():
-        leaf.setAttribute(k, v)
-    return xmlElement.appendChild(leaf)
 
 
 def savePlotStateOptions(xmlElement, odbDisplay):
@@ -112,28 +113,28 @@ def saveActiveViewCut(xmlElement, abaqusObject):
             xmlElement.ownerDocument.createTextNode('OFF'))
     xmlElement.appendChild(vc)
 
+
 def saveWindowState(xmlElement, viewport):
+    "Store whether the viewport is normal or maximized"
     if MAXIMIZED == viewport.windowState:
         xmlElement.appendChild(xmlElement.ownerDocument.createElement('maximize'))
     elif MINIMIZED == viewport.windowState:
         xmlElement.appendChild(xmlElement.ownerDocument.createElement('minimize'))
     elif NORMAL == viewport.windowState:
         xmlElement.appendChild(xmlElement.ownerDocument.createElement('restore'))
-    
 
-odbDisplay = session.viewports.values()[0].odbDisplay
 
 attrs = {
-    ViewportType: [saveWindowState, 'origin', 'width', 'height', 
+    abaqus.ViewportType: [saveWindowState, 'origin', 'width', 'height', 
         'viewportAnnotationOptions', 'view', 'odbDisplay'],
-    ViewType: ['width', 'cameraTarget', 'cameraPosition', 'cameraUpVector'],
+    abaqus.ViewType: ['width', 'cameraTarget', 'cameraPosition', 'cameraUpVector'],
     type(odbDisplay): ['display', savePlotStateOptions, 'commonOptions',
         saveActiveViewCut ],
-    type(session.viewports): [ saveRepository ],   # Repository type
     type(odbDisplay.viewCuts.values()[0]): [ saveViewCut ],
     }
 
 skip = ['autoDeformationScaleValue', 'autoMaxValue', 'autoMinValue']
+ 
 
 def savexml(xmlElement, abaqusObject):
     if hasattr(abaqusObject, 'name'):
@@ -163,23 +164,151 @@ def savexml(xmlElement, abaqusObject):
         # No data members
         xmlElement.appendChild(
             xmlElement.ownerDocument.createTextNode(repr(abaqusObject)))
-        
-impl = minidom.getDOMImplementation()
-xmldoc = impl.createDocument(None, "userViews", None)
 
-userview = addLeaf(xmldoc.documentElement, 'userView')
-userview.setAttribute('name', 'xyzsdfdf.png')
-userview.setAttribute('abaqusViewer',
-        '%s.%s-%s'%(majorVersion, minorVersion, updateVersion))
-now = iso8601.time.time()
-userview.setAttribute('dateTime', iso8601.tostring(now))
 
-vpElement = addLeaf(userview, 'Viewport')
+def addUserView(name=None):
+    "Create a new userView xmlElement with the given name."
+    userView = addLeaf(xmldoc.documentElement, 'userView')
+    if (name):
+        userView.setAttribute('name', name)
+    userView.setAttribute('abaqusViewer',
+            '%s.%s-%s'%(abaqus.majorVersion, abaqus.minorVersion,
+                abaqus.updateVersion))
+    now = iso8601.time.time()
+    userView.setAttribute('dateTime', iso8601.tostring(now))
+    userView.setAttribute('version', str(viewsCommon.__version__))
+    return userView
 
-savexml(vpElement, session.viewports.values()[0])
+###############################################################################
+# Functions to extract a view from the database
+###############################################################################
 
-f = open('userViews.xml', 'w')
-f.write(xmldoc.toprettyxml())
-f.close()
+def getLeaf(xmlElement, abaqusObject):
+    "Recursively extract xml data and set abaqus values"
+    if callable(abaqusObject):
+        arguments=dict([ (str(key), str(value))
+            for key, value in xmlElement.attributes.items() ])
+        for xmlChild in xmlElement.childNodes:
+            if xmlChild.ELEMENT_NODE == xmlChild.nodeType and \
+                    xmlChild.getAttribute('type') == u'argument':
+                        arguments[str(xmlChild.tagName)] = eval(getLeaf(xmlChild, None))
+        try:
+            abaqusObject = abaqusObject(**arguments)
+        except TypeError, msg:
+            print repr(abaqusObject), msg
+            if arguments.has_key('name'):
+                abaqusObject = abaqusObject(name=arguments['name'])
+        except VisError, msg:
+            print repr(abaqusObject), msg
 
-xmldoc.unlink()
+    setValues = {}
+    text = ''
+    for xmlChild in xmlElement.childNodes:
+        if xmlChild.ELEMENT_NODE == xmlChild.nodeType and \
+            not len(xmlChild.getAttribute('type')):
+                abaqusChild = getattr(abaqusObject, xmlChild.tagName, None)
+                value = getLeaf(xmlChild, abaqusChild)
+                if len(value):
+                    setValues[str(xmlChild.tagName)] = eval(value)
+        elif xmlChild.TEXT_NODE == xmlChild.nodeType:
+            text += xmlChild.data
+
+    if len(setValues) and hasattr(abaqusObject, 'setValues'):
+        abaqusObject.setValues(**setValues)
+
+    return text.strip()
+
+###############################################################################
+# File access functions
+###############################################################################
+
+def readXml(fileName=viewsCommon.xmlFileName):
+    "Read fileName into xmldoc or create a new xmldoc if necessary"
+    global xmldoc
+    if os.path.exists(fileName):
+        xmldoc = minidom.parse(fileName)
+    else:
+        # Create a new document
+        impl = minidom.getDOMImplementation()
+        xmldoc = impl.createDocument(None, "userViews", None)
+    assert xmldoc.documentElement.tagName == "userViews"
+
+
+def saveXml(fileName=viewsCommon.xmlFileName):
+    "Save the xml document to fileName"
+    if os.path.exists(fileName):
+        bkupName = fileName + '~'
+        if os.path.exists(bkupName):
+            os.remove(bkupName)
+        os.rename(fileName, bkupName)
+    open(fileName, 'w').write(xmldoc.toxml())
+    #os.remove(bkupName)
+
+
+def upgradeViews():
+    "Upgrade from text file format"
+    import re
+    attrre = re.compile('(\w+)=(\(.*?\)|.*?),')
+    for fn in (viewsCommon.userFileName, viewsCommon.printFileName):
+        if os.path.exists(fn):
+            odbname=None
+            for line in open(fn):
+                line = line.strip()
+                sp = line.split(';')
+                if 1 == len(sp):
+                    odbname = sp[0]
+                else:
+                    userview = addUserView(name=sp[0])
+                    vpElement = addLeaf(userview, 'Viewport')
+                    vpElement.setAttribute('name', 'Viewport: 1')
+                    viewElement = addLeaf(vpElement, 'view')
+                    for key, value in attrre.findall(sp[1] + ','):
+                        addLeaf(viewElement, key, value)
+
+                    odElement = addLeaf(vpElement, 'odbDisplay')
+                    odElement.setAttribute('name', odbname)
+            os.rename(fn, fn + '~')  # prevent parsing next time
+            saveXml()
+
+
+
+###############################################################################
+# Abaqus/Viewer plugin functions
+###############################################################################
+
+def printToFileCallback(callingObject, args, kws, user):
+    "Add a new userView to the xml document"
+
+    userView = addUserView(name=kws['fileName'])
+    for object in kws['canvasObjects']:
+        if isinstance(object, ViewportType):
+            vpElement = addLeaf(userView, 'Viewport')
+            savexml(vpElement, object)
+    session.customData.userViews.append(userView) # pass to gui
+    saveXml()
+
+
+def setView(xmlUserView):
+    vps = xmluserView.getElementsByTagName('Viewport')
+    if len(vps) > 1:
+        for vpElement in vps:
+            getLeaf(vpElement, session) # will create and edit viewports
+    else:
+        vpElement = vps[0]
+        vpObject = session.viewports.values()[0]  # current viewport
+        getLeaf(vpElement, vpObject)
+   
+
+def init():
+    import methodCallback
+    print __name__, 'addCallback printToFile'
+    methodCallback.addCallback(type(abaqus.session), 'printToFile', 
+            printToFileCallback)
+    readXml()
+    upgradeViews()
+
+    # Add to session.customData
+    if not hasattr(abaqus.session.customData, "userViews"):
+        abaqus.session.customData.userViews = customKernel.RegisteredList()
+    abaqus.session.customData.userViews += xmldoc.getElementsByTagName("userView")
+
