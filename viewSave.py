@@ -289,6 +289,8 @@ def printToFileCallback(callingObject, args, kws, user):
 
 
 def setView(xmlUserView):
+    if isinstance(xmlUserView, int):
+        xmlUserView = xmldoc.getElementsByTagName("userView")[xmlUserView]
     vps = xmluserView.getElementsByTagName('Viewport')
     if len(vps) > 1:
         for vpElement in vps:
@@ -310,5 +312,10 @@ def init():
     # Add to session.customData
     if not hasattr(abaqus.session.customData, "userViews"):
         abaqus.session.customData.userViews = customKernel.RegisteredList()
-    abaqus.session.customData.userViews += xmldoc.getElementsByTagName("userView")
+    for view in xmldoc.getElementsByTagName("userView"):
+        name = view.getAttribute('name')
+        date = view.getAttribute('date')
+        od = userView.getElementsByTagName("odbDisplay")[0]
+        odbName = od.getAttribute('name')
+        abaqus.session.customData.userViews.append( (name, date, odbName) )
 

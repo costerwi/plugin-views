@@ -7,8 +7,6 @@ $Id$
 from abaqusGui import *
 import abaqusConstants
 import viewsCommon
-from xml.dom import minidom
-from xml.utils import iso8601 # date/time support
 
 ###########################################################################
 # Dialog box
@@ -50,10 +48,7 @@ class viewManagerDB(AFXDataDialog):
     def show(self):
         "Read view settings from registered list"
         parents = {}
-        for userView in session.customData.userViews:
-            print userView, dir(userView), minidom.Element.toxml(userView)
-            od = userView.getElementsByTagName("userView")[0]
-            odbName = od.getAttribute('name')
+        for name, date, odbName in session.customData.userViews:
             if parents.has_key(odbName):
                 parent = parents[odbName]
             else:
@@ -69,7 +64,6 @@ class viewManagerDB(AFXDataDialog):
                             text=odbName)
                 parents[odbName] = parent
 
-            name = userView.getAttribute('name')
             self.tree.addItemLast(p=parent, text=name,
                 ptr=userView)
         return AFXDataDialog.show(self)
