@@ -166,7 +166,7 @@ def savexml(xmlElement, abaqusObject):
             xmlElement.ownerDocument.createTextNode(repr(abaqusObject)))
 
 
-def addUserView(name=None):
+def newUserView(name=None):
     "Create a new userView xmlElement with the given name."
     userView = addLeaf(xmldoc.documentElement, 'userView')
     if (name):
@@ -178,6 +178,20 @@ def addUserView(name=None):
     userView.setAttribute('dateTime', iso8601.tostring(now))
     userView.setAttribute('version', str(viewsCommon.__version__))
     return userView
+
+
+def addUserView(xmlView):
+    "Add a view to the session.customData"
+    uv = abaqus.session.customData.userViews
+    id = len(uv)
+    name = str(xmlView.getAttribute('name'))
+    dateTime = iso8601.parse(xmlView.getAttribute('dateTime'))
+    localtime = iso8601.time.localtime(dateTime)
+    datestr = iso8601.time.strftime('%Y-%m-%d %H:%M', localtime)
+    for od in xmlView.getElementsByTagName("odbDisplay"):
+        odbName = str(od.getAttribute('name'))
+        uv.append( (str(id), name, datestr, odbName) )
+
 
 ###############################################################################
 # Functions to extract a view from the database
@@ -258,12 +272,14 @@ def upgradeViews():
                 if 1 == len(sp):
                     odbname = sp[0]
                 else:
-                    userview = addUserView(name=sp[0])
+                    userview = newUserView(name=sp[0])
                     vpElement = addLeaf(userview, 'Viewport')
                     vpElement.setAttribute('name', 'Viewport: 1')
                     viewElement = addLeaf(vpElement, 'view')
                     for key, value in attrre.findall(sp[1] + ','):
-                        addLeaf(viewElement, key, value)
+                        leaf = addLeaf(viewElement, key)
+                        leaf.appendChild(
+                            leaf.ownerDocument.createTextNode(value))
 
                     odElement = addLeaf(vpElement, 'odbDisplay')
                     odElement.setAttribute('name', odbname)
@@ -279,29 +295,39 @@ def upgradeViews():
 def printToFileCallback(callingObject, args, kws, user):
     "Add a new userView to the xml document"
 
-    userView = addUserView(name=kws['fileName'])
+    userView = newUserView(name=kws['fileName'])
     for object in kws['canvasObjects']:
-        if isinstance(object, ViewportType):
+        if isinstance(object, abaqus.ViewportType):
             vpElement = addLeaf(userView, 'Viewport')
             savexml(vpElement, object)
-    session.customData.userViews.append(userView) # pass to gui
+    addUserView(userView) # pass to gui
     saveXml()
 
 
-def setView(xmlUserView):
-    if isinstance(xmlUserView, int):
-        xmlUserView = xmldoc.getElementsByTagName("userView")[xmlUserView]
-    vps = xmluserView.getElementsByTagName('Viewport')
-    if len(vps) > 1:
-        for vpElement in vps:
-            getLeaf(vpElement, session) # will create and edit viewports
-    else:
-        vpElement = vps[0]
-        vpObject = session.viewports.values()[0]  # current viewport
-        getLeaf(vpElement, vpObject)
+def setView(viewId):
+    """Retrieve the xmlElement for the identified userView.
+
+    Called by viewManagerForm when executing the form command.
+    """
+    viewId = int(viewId)
+    if viewId < len(abaqus.session.customData.userViews):
+        print abaqus.session.customData.userViews[viewId]
+        xmlUserView = xmldoc.getElementsByTagName("userView")[viewId]
+        vps = xmlUserView.getElementsByTagName('Viewport')
+        if len(vps) > 1:
+            for vpElement in vps:
+                getLeaf(vpElement, abaqus.session) # will create and edit viewports
+        else:
+            vpElement = vps[0]
+            vpObject = abaqus.session.viewports.values()[0]  # current viewport
+            getLeaf(vpElement, vpObject)
    
 
 def init():
+    """Retrieve the xml document and initialize customData.userViews.
+
+    Called by kernelInitString in toolset registration.
+    """
     import methodCallback
     print __name__, 'addCallback printToFile'
     methodCallback.addCallback(type(abaqus.session), 'printToFile', 
@@ -313,9 +339,5 @@ def init():
     if not hasattr(abaqus.session.customData, "userViews"):
         abaqus.session.customData.userViews = customKernel.RegisteredList()
     for view in xmldoc.getElementsByTagName("userView"):
-        name = view.getAttribute('name')
-        date = view.getAttribute('date')
-        od = userView.getElementsByTagName("odbDisplay")[0]
-        odbName = od.getAttribute('name')
-        abaqus.session.customData.userViews.append( (name, date, odbName) )
+        addUserView(view)
 

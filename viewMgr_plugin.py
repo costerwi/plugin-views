@@ -8,6 +8,17 @@ from abaqusGui import *
 import abaqusConstants
 import viewsCommon
 
+class myQuery:
+    "Object used to register/unregister Queries"
+    def __init__(self, object, subroutine):
+        "register the query when this object is created"
+        self.object = object
+        self.subroutine = subroutine
+        object.registerQuery(subroutine)
+    def __del__(self):
+        "unregister the query when this object is deleted"
+        self.object.unregisterQuery(self.subroutine)
+
 ###########################################################################
 # Dialog box
 ###########################################################################
@@ -18,12 +29,13 @@ class viewManagerDB(AFXDataDialog):
     """
     
     [
-        ID_TREE,
+        ID_TABLE,
         ID_NAME,
         ID_NEWVIEW,
         ID_DELVIEW,
         ID_LAST
     ] = range(AFXDataDialog.ID_LAST, AFXDataDialog.ID_LAST + 5)
+
 
     def __init__(self, form):
         # Construct the base class.
@@ -32,49 +44,99 @@ class viewManagerDB(AFXDataDialog):
                 title="Views Manager",
                 opts=DIALOG_NORMAL|DECOR_RESIZE)
 
-        mainframe = FXVerticalFrame(self, LAYOUT_FILL_X | LAYOUT_FILL_Y)
+        mainframe = FXVerticalFrame(self, FRAME_SUNKEN | LAYOUT_FILL_X | LAYOUT_FILL_Y)
 
-        self.tree = FXTreeList(
+        self.table = AFXTable(
                 p=mainframe,
-                nvis=15,
+                numVisRows=15,
+                numVisColumns=3,
+                numRows=1,
+                numColumns=4,
                 tgt=self,
-                sel=self.ID_TREE,
-                opts=TREELIST_SHOWS_BOXES|TREELIST_ROOT_BOXES|
-                TREELIST_SINGLESELECT|LAYOUT_FILL_X|LAYOUT_FILL_Y)
-        FXMAPFUNC(self, SEL_COMMAND, self.ID_TREE, viewManagerDB.onTree)
+                sel=self.ID_TABLE,
+                opts=AFXTABLE_NORMAL|
+                    AFXTABLE_SINGLE_SELECT|AFXTABLE_ROW_MODE)
+        FXMAPFUNC(self, SEL_CLICKED, self.ID_TABLE, viewManagerDB.onTable)
+        self.table.setLeadingRows(numRows=1)
+        self.table.setLeadingRowLabels('Id\tName\tDate\tOdbName')
+        self.table.setColumnWidth(0, 0) # Don't show id column
+        self.table.setStretchableColumn(3) # Expand OdbName as necessary
 
+        for col in range(self.table.getNumColumns()):
+            self.table.setColumnSortable(col, TRUE) # All are sortable
+        self.table.setCurrentSortColumn(2) # date
+
+        self.appendActionButton(self.APPLY)
         self.appendActionButton(self.DISMISS)
 
-    def show(self):
-        "Read view settings from registered list"
-        parents = {}
-        for name, date, odbName in session.customData.userViews:
-            if parents.has_key(odbName):
-                parent = parents[odbName]
-            else:
-                # insert alpha
-                parent = self.tree.getFirstItem()
-                while parent and (parent.getText().lower() < odbName.lower()):
-                    parent = parent.getNext()
-                if not parent:
-                    parent = self.tree.addItemLast(p=None, text=odbName)
-                elif parent.getText().lower() > line.lower():
-                    parent = self.tree.addItemBefore(
-                            other=parent,
-                            text=odbName)
-                parents[odbName] = parent
 
-            self.tree.addItemLast(p=parent, text=name,
-                ptr=userView)
+    def sortTable(self):
+        "Sort the table data according to the current sortColumn"
+        t = self.table
+        sortColumn = t.getCurrentSortColumn()
+        sortOrder = (sortColumn, t.getColumnSortOrder(sortColumn))
+
+        if self.sortOrder != sortOrder:
+            self.sortOrder = sortOrder
+            nrows = t.getNumRows()
+            ncols = t.getNumColumns()
+
+            values = []
+            for row in range(1, nrows):
+                d = [ t.getItemValue(row, c) for c in range(ncols) ]
+                values.append( (d[sortColumn].lower(), d) )
+ 
+            values.sort()
+            if sortOrder[1] == AFXTable.SORT_ASCENDING:
+                values.reverse()
+
+            for row in range(1, nrows):
+                for col, text in enumerate(values[row - 1][1]):
+                    t.setItemValue(row=row, column=col, valueText=text)
+
+            t.selectRow(1)
+            t.makeRowVisible(1)
+            return 1
+        return 0
+
+
+    def updateTable(self):
+        "Read view settings from customData.userViews registered list"
+        trows = self.table.getNumRows() - 1
+        uv=session.customData.userViews
+        uvrows = len(uv)
+        self.table.insertRows(startRow=trows + 1, numRows=uvrows - trows)
+        for row in range(trows, uvrows):
+            for col, text in enumerate(uv[row]):
+                self.table.setItemValue(
+                        row=row+1,
+                        column=col,
+                        valueText=text)
+        self.sortOrder = None # table needs to be re-sorted
+        self.sortTable()
+
+
+    def onTable(self, sender, sel, ptr):
+        "Table was clicked - update the keyword or sorting"
+        if not self.sortTable():    # sort if necessary
+            row = self.table.getCurrentRow()
+            id = self.table.getItemValue(row, 0)
+            self.getMode().viewId.setValue(id)
+        return 1
+      
+
+    def show(self):
+        "Prepare to show the dialog box"
+        # Register query and populate the table
+        self.userViewsQuery = \
+                myQuery(session.customData.userViews, self.updateTable)
         return AFXDataDialog.show(self)
 
 
-    def onTree(self, sender, sel, ptr):
-        "Tree selection changed - update the view"
-        item=self.tree.getCurrentItem()
-        if item.getData():
-            self.getMode().issueCommands(item.getData())
-        return 1
+    def hide(self):
+        "Called to remove the dialog box"
+        del self.userViewsQuery
+        return AFXDataDialog.hide(self)
 
 
 ###########################################################################
@@ -87,25 +149,17 @@ class viewManagerForm(AFXForm):
         AFXForm.__init__(self, owner) # Construct the base class.
                 
         # Commands.
-        cmd = AFXGuiCommand(self, 'setView', 'viewSave')
+        cmd = AFXGuiCommand(mode=self, method='setView', objectName='viewSave')
 
-        self.parameters=''
+        self.viewId = AFXStringKeyword(command=cmd, 
+                name='viewId',
+                isRequired=TRUE,
+                defaultValue='0')
 
-    def issueCommands(self, parameters=None):
-        "This function now accepts the parameter string to set"
-        if parameters:
-            self.parameters = parameters
-        return AFXForm.issueCommands(self)
-
-    def getCommandString(self):
-        "Construct custom command string"
-        cmdstr = AFXForm.getCommandString(self)
-        cmdstr = cmdstr[:-1] + str(self.parameters) + ")"
-        print cmdstr
-        return cmdstr
 
     def getFirstDialog(self):
         return viewManagerDB(self)
+
 
 ###########################################################################
 # Register abaqus plugin
