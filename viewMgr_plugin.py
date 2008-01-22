@@ -112,14 +112,12 @@ class viewManagerDB(AFXDataDialog):
                         row=row+1,
                         column=col,
                         valueText=text)
-        self.sortOrder = None # table needs to be re-sorted
-        self.sortTable()
 
 
     def onTable(self, sender, sel, ptr):
         "Table was clicked - update the keyword or sorting"
-        if not self.sortTable():    # sort if necessary
-            row = self.table.getCurrentRow()
+        row = self.table.getCurrentRow()
+        if not self.sortTable() and row > 0:    # sort if necessary
             id = self.table.getItemValue(row, 0)
             self.getMode().viewId.setValue(id)
         return 1
@@ -130,6 +128,8 @@ class viewManagerDB(AFXDataDialog):
         # Register query and populate the table
         self.userViewsQuery = \
                 myQuery(session.customData.userViews, self.updateTable)
+        self.sortOrder = None # table needs to be re-sorted
+        self.sortTable()
         return AFXDataDialog.show(self)
 
 
