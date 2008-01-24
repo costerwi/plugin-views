@@ -19,6 +19,17 @@ class myQuery:
         "unregister the query when this object is deleted"
         self.object.unregisterQuery(self.subroutine)
 
+
+class myAFXTable(AFXTable):
+    def deleteRows(self, startRow, numRows=1, notify=FALSE):
+        " Notify the kernel that these views are no longer wanted. "
+        ids = [ self.getItemValue(row, 0) 
+                for row in range(startRow, startRow + numRows) ]
+        sendCommand("viewSave.deleteViews(%r)"%ids)
+        return AFXTable.deleteRows(self, startRow, numRows, notify)
+
+
+
 ###########################################################################
 # Dialog box
 ###########################################################################
@@ -46,7 +57,7 @@ class viewManagerDB(AFXDataDialog):
 
         mainframe = FXVerticalFrame(self, FRAME_SUNKEN | LAYOUT_FILL_X | LAYOUT_FILL_Y)
 
-        self.table = AFXTable(
+        self.table = myAFXTable(
                 p=mainframe,
                 numVisRows=15,
                 numVisColumns=3,
@@ -54,18 +65,23 @@ class viewManagerDB(AFXDataDialog):
                 numColumns=4,
                 tgt=self,
                 sel=self.ID_TABLE,
-                opts=AFXTABLE_NORMAL|
-                    AFXTABLE_SINGLE_SELECT|AFXTABLE_ROW_MODE)
+                opts=AFXTABLE_NORMAL|AFXTABLE_ROW_MODE)
+#                    AFXTABLE_BROWSE_SELECT|AFXTABLE_ROW_MODE)
         FXMAPFUNC(self, SEL_CLICKED, self.ID_TABLE, viewManagerDB.onTable)
+        FXMAPFUNC(self, SEL_COMMAND, self.ID_TABLE, viewManagerDB.onCommand)
         self.table.setLeadingRows(numRows=1)
         self.table.setLeadingRowLabels('Id\tName\tDate\tOdbName')
         self.table.setColumnWidth(0, 0) # Don't show id column
+        self.table.setColumnEditable(1, 1) # Allow name edit
         self.table.setStretchableColumn(3) # Expand OdbName as necessary
 
         for col in range(self.table.getNumColumns()):
             self.table.setColumnSortable(col, TRUE) # All are sortable
         self.table.setCurrentSortColumn(2) # date
 
+        self.table.setPopupOptions(
+                AFXTable.POPUP_DELETE_ROW
+                |AFXTable.POPUP_FILE)
         self.appendActionButton(self.APPLY)
         self.appendActionButton(self.DISMISS)
 
@@ -87,15 +103,15 @@ class viewManagerDB(AFXDataDialog):
                 values.append( (d[sortColumn].lower(), d) )
  
             values.sort()
-            if sortOrder[1] == AFXTable.SORT_ASCENDING:
+            if sortOrder[1] == AFXTable.SORT_DESCENDING:
                 values.reverse()
 
             for row in range(1, nrows):
                 for col, text in enumerate(values[row - 1][1]):
                     t.setItemValue(row=row, column=col, valueText=text)
 
-            t.selectRow(1)
-            t.makeRowVisible(1)
+            # t.selectRow(1)
+            # t.makeRowVisible(1)
             return 1
         return 0
 
@@ -114,13 +130,25 @@ class viewManagerDB(AFXDataDialog):
                         valueText=text)
 
 
+    def onCommand(self, sender, sel, ptr):
+        " Called for rename "
+        print "onCommand(", sender, SELID(sel), ptr, ")"
+        row = self.table.getCurrentRow()
+        if row > 0:
+            id = sender.getItemValue(row, 0)
+            name = sender.getItemValue(row, 1)
+            sendCommand("viewSave.renameView(%r, %r)"%(id, name))
+        return 1
+      
+
     def onTable(self, sender, sel, ptr):
         "Table was clicked - update the keyword or sorting"
-        row = self.table.getCurrentRow()
+        print "onTable(", sender, sel, ptr, ")"
+        row = sender.getCurrentRow()
         if not self.sortTable() and row > 0:    # sort if necessary
-            id = self.table.getItemValue(row, 0)
+            id = sender.getItemValue(row, 0)
             self.getMode().viewId.setValue(id)
-        return 1
+        return 0
       
 
     def show(self):

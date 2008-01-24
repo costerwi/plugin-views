@@ -375,7 +375,35 @@ def setView(viewId):
             restoreXml(vpElement, vpObject)
         else:
             print "No viewports defined."
+
    
+def deleteViews(viewIds):
+    "Remove the specified views from the database."
+    for viewId in viewIds:
+        xmlView = xmldoc.getElementById(viewId)
+        if xmlView:
+            xmlView.parentNode.removeChild(xmlView)
+            xmlView.unlink()
+        else:
+            print "View %r not in userViews database."%viewId
+    for view in abaqus.session.customData.userViews:
+        if view[0] in viewIds:
+            abaqus.session.customData.userViews.remove(view)
+    writeXmlFile()
+
+   
+def renameView(viewId, name):
+    "Modify the view name in the database."
+    xmlView = xmldoc.getElementById(viewId)
+    if xmlView:
+        xmlView.setAttribute('name', name)
+        for view in abaqus.session.customData.userViews:
+            if view[0] == viewId:
+                view[1] = name
+    else:
+        print "View %r not in userViews database."%viewId
+    writeXmlFile()
+
 
 def init():
     """Retrieve the xml document and initialize customData.userViews.
