@@ -200,7 +200,7 @@ def saveXml(xmlElement, abaqusObject):
             xmlElement.ownerDocument.createTextNode(repr(abaqusObject)))
 
 
-def addUserView(xmlView):
+def addSessionUserView(xmlView):
     "Add a view to the session.customData"
     id = str(getUniqueId(xmlView))
     name = str(xmlView.getAttribute('name'))
@@ -275,19 +275,22 @@ def readXmlFile(fileName):
 #                namespaceURI=None,
 #                qualifiedName="userViews",
 #                doctype=doctype)
+        doc.changed = 1
     assert doc.documentElement.tagName == "userViews"
     return doc
 
 
 def writeXmlFile(fileName=viewsCommon.xmlFileName):
     "Save the xml document to fileName"
+    if not hasattr(xmldoc, 'changed'):
+        return
     if os.path.exists(fileName):
         bkupName = fileName + '~'
         if os.path.exists(bkupName):
             os.remove(bkupName)
         os.rename(fileName, bkupName)
     open(fileName, 'w').write(xmldoc.toxml())
-    #os.remove(bkupName)
+    delattr(xmldoc, 'changed')
 
 
 def upgradeViews():
@@ -296,6 +299,7 @@ def upgradeViews():
     attrre = re.compile('(\w+)=(\(.*?\)|.*?),')
     for fn in (viewsCommon.userFileName, viewsCommon.printFileName):
         if os.path.exists(fn):
+            xmldoc.changed = 1
             abaqus.milestone('Importing views from %r'%fn)
             dateTime = iso8601.tostring(os.stat(fn).st_mtime)
             odbname=None
@@ -322,7 +326,7 @@ def upgradeViews():
                     odElement = addLeaf(vpElement, 'odbDisplay')
                     odElement.setAttribute('name', odbname)
             os.rename(fn, fn + '~')  # prevent parsing next time
-            writeXmlFile()
+
 
 ###############################################################################
 # Abaqus/Viewer plugin functions
@@ -344,7 +348,8 @@ def printToFileCallback(callingObject, args, kws, user):
         if isinstance(object, abaqus.ViewportType):
             vpElement = addLeaf(userView, 'Viewport')
             saveXml(vpElement, object)
-    addUserView(userView) # pass to gui
+    addSessionUserView(userView) # pass to gui
+    xmldoc.changed = 1
     writeXmlFile()
 
 
@@ -384,12 +389,12 @@ def deleteViews(viewIds):
         if xmlView:
             xmlView.parentNode.removeChild(xmlView)
             xmlView.unlink()
+            xmldoc.changed = 1
         else:
             print "View %r not in userViews database."%viewId
     for view in abaqus.session.customData.userViews:
         if view[0] in viewIds:
             abaqus.session.customData.userViews.remove(view)
-    writeXmlFile()
 
    
 def renameView(viewId, name):
@@ -397,12 +402,15 @@ def renameView(viewId, name):
     xmlView = xmldoc.getElementById(viewId)
     if xmlView:
         xmlView.setAttribute('name', name)
-        for view in abaqus.session.customData.userViews:
-            if view[0] == viewId:
-                view[1] = name
+        views = abaqus.session.customData.userViews
+        for rownum, row in enumerate(views):
+            if row[0] == viewId:
+                copy = list(row)
+                copy[1] = name
+                views[rownum] = tuple(copy)
+        xmldoc.changed = 1
     else:
         print "View %r not in userViews database."%viewId
-    writeXmlFile()
 
 
 def init():
@@ -419,7 +427,7 @@ def init():
     if not hasattr(abaqus.session.customData, "userViews"):
         abaqus.session.customData.userViews = customKernel.RegisteredList()
     for view in xmldoc.getElementsByTagName("userView"):
-        addUserView(view)
+        addSessionUserView(view)
 
     print __name__, 'addCallback printToFile'
     methodCallback.addCallback(type(abaqus.session), 'printToFile', 

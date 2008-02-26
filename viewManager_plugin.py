@@ -7,6 +7,7 @@ $Id$
 from abaqusGui import *
 import abaqusConstants
 import viewsCommon
+import re
 
 class myQuery:
     "Object used to register/unregister Queries"
@@ -23,11 +24,13 @@ class myQuery:
 class myAFXTable(AFXTable):
     def deleteRows(self, startRow, numRows=1, notify=FALSE):
         " Notify the kernel that these views are no longer wanted. "
-        ids = [ self.getItemValue(row, 0) 
-                for row in range(startRow, startRow + numRows) ]
-        sendCommand("viewSave.deleteViews(%r)"%ids)
-        return AFXTable.deleteRows(self, startRow, numRows, notify)
-
+        if notify:
+            ids = [ self.getItemValue(row, 0) 
+                    for row in range(startRow, startRow + numRows) ]
+            AFXTable.deleteRows(self, startRow, numRows, notify)
+            sendCommand("viewSave.deleteViews(%r)"%ids)
+        else:
+            AFXTable.deleteRows(self, startRow, numRows, notify)
 
 
 ###########################################################################
@@ -41,7 +44,7 @@ class viewManagerDB(AFXDataDialog):
     
     [
         ID_TABLE,
-        ID_NAME,
+        ID_FILTER,
         ID_NEWVIEW,
         ID_DELVIEW,
         ID_LAST
@@ -82,88 +85,108 @@ class viewManagerDB(AFXDataDialog):
         self.table.setPopupOptions(
                 AFXTable.POPUP_DELETE_ROW
                 |AFXTable.POPUP_FILE)
+
+        self.filter = ''  # Don't filter anything
+        AFXTextField(p=mainframe,
+                ncols=15,
+                labelText='Regular expression filter:',
+                tgt=self,
+                sel=self.ID_FILTER,
+                opts=LAYOUT_FILL_X)
+        FXMAPFUNC(self, SEL_COMMAND, self.ID_FILTER, viewManagerDB.onFilter)
+
         self.appendActionButton(self.APPLY)
         self.appendActionButton(self.DISMISS)
-
-
-    def sortTable(self):
-        "Sort the table data according to the current sortColumn"
-        t = self.table
-        sortColumn = t.getCurrentSortColumn()
-        sortOrder = (sortColumn, t.getColumnSortOrder(sortColumn))
-
-        if self.sortOrder != sortOrder:
-            self.sortOrder = sortOrder
-            nrows = t.getNumRows()
-            ncols = t.getNumColumns()
-
-            values = []
-            for row in range(1, nrows):
-                d = [ t.getItemValue(row, c) for c in range(ncols) ]
-                values.append( (d[sortColumn].lower(), d) )
- 
-            values.sort()
-            if sortOrder[1] == AFXTable.SORT_DESCENDING:
-                values.reverse()
-
-            for row in range(1, nrows):
-                for col, text in enumerate(values[row - 1][1]):
-                    t.setItemValue(row=row, column=col, valueText=text)
-
-            # t.selectRow(1)
-            # t.makeRowVisible(1)
-            return 1
-        return 0
-
+        
 
     def updateTable(self):
         "Read view settings from customData.userViews registered list"
-        trows = self.table.getNumRows() - 1
-        uv=session.customData.userViews
-        uvrows = len(uv)
-        self.table.insertRows(startRow=trows + 1, numRows=uvrows - trows)
-        for row in range(trows, uvrows):
-            for col, text in enumerate(uv[row]):
+        sortColumn = self.table.getCurrentSortColumn()
+
+        # Collect filtered table data
+        filtered = []
+        filterre = re.compile(self.filter, re.IGNORECASE)
+        for row in session.customData.userViews:
+            if filterre.search(' '.join(row)):
+                filtered.append( (row[sortColumn].lower(), row) )
+
+        # Sort table data
+        filtered.sort()
+        if self.table.getColumnSortOrder(sortColumn) == AFXTable.SORT_DESCENDING:
+            filtered.reverse()
+
+        # Adjust table widget size
+        diff = len(filtered) + 1 - self.table.getNumRows()
+        if diff > 0:
+            self.table.insertRows(
+                    startRow=1,
+                    numRows=diff,
+                    notify=FALSE)
+        elif diff < 0:
+            self.table.deleteRows(
+                    startRow=1,
+                    numRows=-diff,
+                    notify=FALSE)
+
+        # Update table widget
+        selected = self.getMode().viewId.getValue()
+        for row, (key, rowtext) in enumerate(filtered):
+            tableRow = row + 1
+            if rowtext[0] == selected:
+                selected = tableRow
+            self.table.deselectRow(tableRow)
+            for col, itemtext in enumerate(rowtext):
                 self.table.setItemValue(
-                        row=row+1,
+                        row=tableRow,
                         column=col,
-                        valueText=text)
+                        valueText=itemtext)
+
+        if isinstance(selected, int):
+            self.table.selectRow(selected)
+            self.table.makeRowVisible(selected)
 
 
     def onCommand(self, sender, sel, ptr):
         " Called for rename "
-        print "onCommand(", sender, SELID(sel), ptr, ")"
         row = self.table.getCurrentRow()
         if row > 0:
             id = sender.getItemValue(row, 0)
             name = sender.getItemValue(row, 1)
-            sendCommand("viewSave.renameView(%r, %r)"%(id, name))
-        return 1
-      
+            sendCommand("viewSave.renameView(viewId=%r, name=%r)"%(id, name))
+        return 0
+
 
     def onTable(self, sender, sel, ptr):
         "Table was clicked - update the keyword or sorting"
-        print "onTable(", sender, sel, ptr, ")"
         row = sender.getCurrentRow()
-        if not self.sortTable() and row > 0:    # sort if necessary
+        if row > 0:
             id = sender.getItemValue(row, 0)
             self.getMode().viewId.setValue(id)
+        if row == 0:
+            self.updateTable()  # sorting has changed
         return 0
-      
+ 
+
+    def onFilter(self, sender, sel, ptr):
+        "Search field was changed"
+        self.filter = sender.getText()
+        self.updateTable()
+        return 0
+
 
     def show(self):
         "Prepare to show the dialog box"
         # Register query and populate the table
         self.userViewsQuery = \
                 myQuery(session.customData.userViews, self.updateTable)
-        self.sortOrder = None # table needs to be re-sorted
-        self.sortTable()
+        self.updateTable()
         return AFXDataDialog.show(self)
 
 
     def hide(self):
         "Called to remove the dialog box"
         del self.userViewsQuery
+        sendCommand("viewSave.writeXmlFile()")
         return AFXDataDialog.hide(self)
 
 
