@@ -158,8 +158,9 @@ def saveWindowState(xmlElement, viewport):
 knownObjects = {
     'Viewport': [saveWindowState, 'origin', 'width', 'height', 
         'viewportAnnotationOptions', 'view', 'odbDisplay'],
-    'View': ['width', 
-        'cameraTarget', 'cameraPosition', 'cameraUpVector'],
+    'View': ['projection',
+        'cameraTarget', 'cameraPosition', 'cameraUpVector',
+        'width', 'viewOffsetX', 'viewOffsetY'],
     'OdbDisplay': ['display', savePlotStateOptions, 'commonOptions',
         saveActiveViewCut ],
     'ViewCut': [ saveViewCut ],
