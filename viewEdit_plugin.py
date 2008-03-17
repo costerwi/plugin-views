@@ -23,28 +23,42 @@ class viewEditDB(AFXDataDialog):
                 actionButtonIds=self.OK | self.APPLY | self.DISMISS,
                 opts=DIALOG_NORMAL|DECOR_RESIZE)
 
-        self.cameraTarget = AFXTextField(
+        AFXTextField(
                 p=self,
                 ncols=10,
                 labelText='cameraTarget',
                 tgt=form.cameraTargetKw,
                 opts=LAYOUT_FILL_X)
 
-        self.cameraPosition = AFXTextField(
+        AFXTextField(
                 p=self,
                 ncols=10,
                 labelText='cameraPosition',
                 tgt=form.cameraPositionKw,
                 opts=LAYOUT_FILL_X)
 
-        self.cameraUpVector = AFXTextField(
+        AFXTextField(
                 p=self,
                 ncols=10,
                 labelText='cameraUpVector',
                 tgt=form.cameraUpVectorKw,
                 opts=LAYOUT_FILL_X)
 
-        self.width = AFXTextField(
+        AFXTextField(
+                p=self,
+                ncols=10,
+                labelText='viewOffsetX',
+                tgt=form.viewOffsetXKw,
+                opts=LAYOUT_FILL_X)
+
+        AFXTextField(
+                p=self,
+                ncols=10,
+                labelText='viewOffsetY',
+                tgt=form.viewOffsetYKw,
+                opts=LAYOUT_FILL_X)
+
+        AFXTextField(
                 p=self,
                 ncols=10,
                 labelText='width',
@@ -87,6 +101,16 @@ class viewEditForm(AFXForm):
                 minLength=3,
                 maxLength=3)
 
+        self.viewOffsetXKw = AFXFloatKeyword(
+                command=optionsCmd,
+                name='viewOffsetX',
+                isRequired=FALSE)
+
+        self.viewOffsetYKw = AFXFloatKeyword(
+                command=optionsCmd,
+                name='viewOffsetY',
+                isRequired=FALSE)
+
         self.widthKw = AFXFloatKeyword(
                 command=optionsCmd,
                 name='width',
@@ -103,7 +127,7 @@ toolset = getAFXApp().getAFXMainWindow().getPluginToolset()
 toolset.registerGuiMenuButton(buttonText='&Views|&Edit...', 
                               object=viewEditForm(toolset),
                               author='Carl Osterwisch',
-                              version=str(0.1),
+                              version=str(0.2),
                               applicableModules=abaqusConstants.ALL,
                               description='Edit current view vectors.'
                               )
