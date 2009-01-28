@@ -99,6 +99,9 @@ def synchVps(basevp=None):
         if othervp.name == basevp.name:
             # Skip this viewport if it is the base viewport
             continue
+        if othervp.windowState == MINIMIZED:
+            # Ignore minimized viewports
+            continue
         if hasattr(basevp.odbDisplay, 'display'):
             # CAE version >=6.6
             othervp.odbDisplay.display.setValues(
