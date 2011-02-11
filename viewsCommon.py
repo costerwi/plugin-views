@@ -3,7 +3,7 @@
 """
 # $Id$
 
-__version__ = 0.51
+__version__ = 0.52
 userFileName = 'userViews.txt'
 printFileName = 'printViews.txt'
 xmlFileName = 'userViews.xml'
