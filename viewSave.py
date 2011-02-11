@@ -1,4 +1,4 @@
-# $Id$
+# $Id$ vim: set modeline foldmethod=marker:
 
 import viewsCommon
 import abaqus
@@ -10,11 +10,9 @@ from xml.utils import iso8601 # date/time support
 
 xmldoc = None
 
-###############################################################################
-# Utility functions
-###############################################################################
+# {{{1 Utility functions ######################################################
 
-def encode(value, chars="abcdefghijklmnopqrstuvwxyz"):
+def encode(value, chars="abcdefghijklmnopqrstuvwxyz"):  # {{{2
     "Return the int value encoded into arbitrary base defined by chars."
     if not value:
         return chars[0]
@@ -27,7 +25,7 @@ def encode(value, chars="abcdefghijklmnopqrstuvwxyz"):
     return ''.join(converted)
 
 
-def getUniqueId(xmlElement):
+def getUniqueId(xmlElement):    # {{{2
     "Return a unique id for this xmlElement, creating one if necessary."
     import random
     id = xmlElement.getAttribute('id')
@@ -43,7 +41,7 @@ def getUniqueId(xmlElement):
     return id
 
 
-def addLeaf(xmlElement, key, value=None, attrs={}):
+def addLeaf(xmlElement, key, value=None, attrs={}): # {{{2
     "Return a new child element of xmlElement with optional text value."
     leaf = xmlElement.ownerDocument.createElement(key)
     if value:
@@ -55,10 +53,9 @@ def addLeaf(xmlElement, key, value=None, attrs={}):
 
 
 ###############################################################################
-# Functions to save a view in the database
-###############################################################################
+# {{{1 Functions to save a view in the database ###############################
 
-def saveViewCut(xmlElement, viewCut):
+def saveViewCut(xmlElement, viewCut):   # {{{2
     "Add child elements to xmlElement which define the viewCut."
     arguments = ['shape']
     members = ['showModelAboveCut', 'showModelOnCut', 'showModelBelowCut']
@@ -92,7 +89,7 @@ def saveViewCut(xmlElement, viewCut):
         saveXml(attrElement, getattr(viewCut, attr))
 
 
-def saveActiveViewCut(xmlElement, abaqusObject):
+def saveActiveViewCut(xmlElement, abaqusObject): # {{{2
     "Add child elements to xmlElement to define the active view cut."
     viewCutNames=[]
     for viewCut in abaqusObject.viewCuts.values():
@@ -110,7 +107,7 @@ def saveActiveViewCut(xmlElement, abaqusObject):
             xmlElement.ownerDocument.createTextNode('OFF'))
 
 
-def savePlotStateOptions(xmlElement, odbDisplay):
+def savePlotStateOptions(xmlElement, odbDisplay):   # {{{2
     "Add child elements to xmlElement depending on the current plotState."
     plotState = odbDisplay.display.plotState
     if DEFORMED in plotState or \
@@ -145,7 +142,7 @@ def savePlotStateOptions(xmlElement, odbDisplay):
         saveXml(addLeaf(xmlElement, 'superimposeOptions'), odbDisplay.superimposeOptions)
             
 
-def saveWindowState(xmlElement, viewport):
+def saveWindowState(xmlElement, viewport):  # {{{2
     "Store whether the viewport is normal or maximized"
     if MAXIMIZED == viewport.windowState:
         addLeaf(xmlElement, 'maximize')
@@ -155,7 +152,7 @@ def saveWindowState(xmlElement, viewport):
         addLeaf(xmlElement, 'restore')
 
 
-knownObjects = {
+knownObjects = {    # {{{2 What to save and what to skip from each element type
     'Viewport': [saveWindowState, 'origin', 'width', 'height', 
         'viewportAnnotationOptions', 'view', 'odbDisplay'],
     'View': ['projection',
@@ -169,7 +166,7 @@ knownObjects = {
 skipMembers = ['autoDeformationScaleValue', 'autoMaxValue', 'autoMinValue']
  
 
-def saveXml(xmlElement, abaqusObject):
+def saveXml(xmlElement, abaqusObject):  # {{{2
     "Recursively read abaqus data and store in xml dom."
     if hasattr(abaqusObject, 'name'):
         xmlElement.setAttribute('name', abaqusObject.name)
@@ -201,7 +198,7 @@ def saveXml(xmlElement, abaqusObject):
             xmlElement.ownerDocument.createTextNode(repr(abaqusObject)))
 
 
-def addSessionUserView(xmlView):
+def addSessionUserView(xmlView):    # {{{2 Update customData.userViews for the GUI
     "Add a view to the session.customData"
     id = str(getUniqueId(xmlView))
     name = str(xmlView.getAttribute('name'))
@@ -216,9 +213,7 @@ def addSessionUserView(xmlView):
                 (id, name, datestr, odbName) )
 
 
-###############################################################################
-# Functions to restore a view from the database
-###############################################################################
+# {{{1 Functions to restore a view from the database ##########################
 
 def restoreXml(xmlElement, abaqusObject):
     "Recursively extract xml data and set abaqus values"
@@ -253,11 +248,9 @@ def restoreXml(xmlElement, abaqusObject):
 
     return text.strip()
 
-###############################################################################
-# File access functions
-###############################################################################
+# {{{1 File access functions ##################################################
 
-def readXmlFile(fileName):
+def readXmlFile(fileName):  # {{{2
     "Read fileName into xmldoc or create a new xmldoc if necessary"
     if os.path.exists(fileName):
         doc = minidom.parse(fileName)
@@ -281,7 +274,7 @@ def readXmlFile(fileName):
     return doc
 
 
-def writeXmlFile(fileName=viewsCommon.xmlFileName):
+def writeXmlFile(fileName=viewsCommon.xmlFileName): # {{{2
     "Save the xml document to fileName"
     if not hasattr(xmldoc, 'changed'):
         return
@@ -294,7 +287,7 @@ def writeXmlFile(fileName=viewsCommon.xmlFileName):
     delattr(xmldoc, 'changed')
 
 
-def upgradeViews():
+def upgradeViews(): # {{{2 Totally obsolete by now
     "Upgrade from old text file format"
     import re
     attrre = re.compile('(\w+)=(\(.*?\)|.*?),')
@@ -329,11 +322,9 @@ def upgradeViews():
             os.rename(fn, fn + '~')  # prevent parsing next time
 
 
-###############################################################################
-# Abaqus/Viewer plugin functions
-###############################################################################
+# {{{1 Abaqus/Viewer plugin functions #########################################
 
-def printToFileCallback(callingObject, args, kws, user):
+def printToFileCallback(callingObject, args, kws, user):    # {{{2
     "Add a new userView to the xml document"
 
     userView = addLeaf(xmldoc.documentElement, 'userView')
@@ -345,6 +336,7 @@ def printToFileCallback(callingObject, args, kws, user):
     userView.setAttribute('dateTime', iso8601.tostring(now))
     userView.setAttribute('version', str(viewsCommon.__version__))
 
+    # TODO: Save annotations
     for object in kws['canvasObjects']:
         if isinstance(object, abaqus.ViewportType):
             vpElement = addLeaf(userView, 'Viewport')
@@ -354,7 +346,7 @@ def printToFileCallback(callingObject, args, kws, user):
     writeXmlFile()
 
 
-def setView(viewId):
+def setView(viewId):    # {{{2 Restore the specified xml userview Id
     """Retrieve the xmlElement for the identified userView.
 
     Called by viewManagerForm when executing the form command.
@@ -370,20 +362,27 @@ def setView(viewId):
             datestr = iso8601.time.strftime('%Y-%m-%d %H:%M', localtime)
         print xmlView.getAttribute('name'), datestr
         vps = xmlView.getElementsByTagName('Viewport')
+        vpObject = abaqus.session.viewports.values()[0]  # current viewport
         if len(vps) > 1:
             for vpElement in vps:
-                # Create viewports as necessary for the userView
-                restoreXml(vpElement, abaqus.session)
+                vpname = str(vpElement.getAttribute('name'))
+                if abaqus.session.viewports.has_key(vpname):
+                    vpObject = abaqus.session.viewports[vpname]
+                else:
+                    # Create viewports as necessary for the userView
+                    odb = abaqus.session.odbs[vpObject.odbDisplay.name]
+                    vpObject = abaqus.session.Viewport(name=vpname)
+                    vpObject.setValues(displayedObject=odb)
+                restoreXml(vpElement, vpObject)
         elif len(vps) == 1:
             vpElement = vps[0]
             # restoreXml settings to the current viewport
-            vpObject = abaqus.session.viewports.values()[0]  # current viewport
             restoreXml(vpElement, vpObject)
         else:
             print "No viewports defined."
 
    
-def deleteViews(viewIds):
+def deleteViews(viewIds):   # {{{2 Delete a userview from the database
     "Remove the specified views from the database."
     for viewId in viewIds:
         xmlView = xmldoc.getElementById(viewId)
@@ -398,7 +397,7 @@ def deleteViews(viewIds):
             abaqus.session.customData.userViews.remove(view)
 
    
-def renameView(viewId, name):
+def renameView(viewId, name):   # {{{2 Rename a userview
     "Modify the view name in the database."
     xmlView = xmldoc.getElementById(viewId)
     if xmlView:
@@ -414,7 +413,7 @@ def renameView(viewId, name):
         print "View %r not in userViews database."%viewId
 
 
-def init():
+def init(): # {{{2
     """Retrieve the xml document and initialize customData.userViews.
 
     Called by kernelInitString in toolset registration.
