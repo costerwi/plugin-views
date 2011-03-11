@@ -9,6 +9,9 @@ from xml.dom import minidom
 from xml.utils import iso8601 # date/time support
 
 xmldoc = None
+debug = os.environ.get('DEBUG')
+if debug:
+    print "viewSave Debug mode is on"
 
 # {{{1 Utility functions ######################################################
 
@@ -161,6 +164,8 @@ knownObjects = {    # {{{2 What to save and what to skip from each element type
     'OdbDisplay': ['display', savePlotStateOptions, 'commonOptions',
         saveActiveViewCut ],
     'ViewCut': [ saveViewCut ],
+    'float' : [],
+    'int': [],
     }
 
 skipMembers = ['autoDeformationScaleValue', 'autoMaxValue', 'autoMinValue']
@@ -175,6 +180,8 @@ def saveXml(xmlElement, abaqusObject):  # {{{2
     typeName = str(type(abaqusObject))[7:-2]
     if knownObjects.has_key(typeName):
         members = knownObjects[typeName]
+        if debug:
+            print "knownObject %r has members %r"%(typeName, members)
     else:
         # Try to figure out which members to save for this object type
         members = knownObjects.setdefault(typeName, [])
@@ -183,6 +190,8 @@ def saveXml(xmlElement, abaqusObject):  # {{{2
                     and not a in skipMembers \
                     and not callable(getattr(abaqusObject, a)):
                 members.append(a)
+        if debug:
+            print "unknownObject %r has members %r"%(typeName, members)
 
     if len(members):
         # Complex type with data members
