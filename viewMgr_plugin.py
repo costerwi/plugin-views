@@ -42,13 +42,14 @@ class viewManagerDB(AFXDataDialog):
     viewsForm will create an instance of this class when the user requests it.
     """
     
-    [
+    (
         ID_TABLE,
         ID_FILTER,
         ID_NEWVIEW,
         ID_DELVIEW,
+        ID_BUTTON_ANNOTATION,
         ID_LAST
-    ] = range(AFXDataDialog.ID_LAST, AFXDataDialog.ID_LAST + 5)
+    ) = range(AFXDataDialog.ID_LAST, AFXDataDialog.ID_LAST + 6)
 
 
     def __init__(self, form):
@@ -63,9 +64,9 @@ class viewManagerDB(AFXDataDialog):
         self.table = myAFXTable(
                 p=mainframe,
                 numVisRows=15,
-                numVisColumns=3,
+                numVisColumns=4,
                 numRows=1,
-                numColumns=4,
+                numColumns=5,
                 tgt=self,
                 sel=self.ID_TABLE,
                 opts=AFXTABLE_NORMAL|AFXTABLE_ROW_MODE)
@@ -73,8 +74,9 @@ class viewManagerDB(AFXDataDialog):
         FXMAPFUNC(self, SEL_CLICKED, self.ID_TABLE, viewManagerDB.onTable)
         FXMAPFUNC(self, SEL_COMMAND, self.ID_TABLE, viewManagerDB.onCommand)
         self.table.setLeadingRows(numRows=1)
-        self.table.setLeadingRowLabels('Id\tName\tDate\tOdbName')
+        self.table.setLeadingRowLabels('Id\tName\tDate\tOdbName\tA')
         self.table.setColumnWidth(0, 0) # Don't show id column
+        self.table.setColumnWidth(4, 15) # Small column for annotation indicator
         self.table.setColumnEditable(1, 1) # Allow name edit
         self.table.setStretchableColumn(3) # Expand OdbName as necessary
 
@@ -96,6 +98,8 @@ class viewManagerDB(AFXDataDialog):
         FXMAPFUNC(self, SEL_COMMAND, self.ID_FILTER, viewManagerDB.onFilter)
 
         self.appendActionButton(self.APPLY)
+        self.appendActionButton(text="Restore Annotations", tgt=self, sel=self.ID_BUTTON_ANNOTATION)
+        FXMAPFUNC(self, SEL_COMMAND, self.ID_BUTTON_ANNOTATION, viewManagerDB.onAnnotation)
         self.appendActionButton(self.DISMISS)
         
 
@@ -136,6 +140,7 @@ class viewManagerDB(AFXDataDialog):
                 selected = tableRow
             self.table.deselectRow(tableRow)
             for col, itemtext in enumerate(rowtext):
+                # TODO make icon for annotation column
                 self.table.setItemValue(
                         row=tableRow,
                         column=col,
@@ -171,6 +176,13 @@ class viewManagerDB(AFXDataDialog):
         "Search field was changed"
         self.filter = sender.getText()
         self.updateTable()
+        return 0
+
+
+    def onAnnotation(self, sender, sel, ptr):
+        "Annotation button was pushed"
+        selected = self.getMode().viewId.getValue()
+        sendCommand("viewSave.setAnnotation(viewId=%r)"%selected)
         return 0
 
 
