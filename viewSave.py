@@ -5,6 +5,7 @@ import abaqus
 from abaqusConstants import *
 import customKernel # for registered list of userViews
 import os
+import sys
 from xml.dom import minidom
 from xml.utils import iso8601 # date/time support
 
@@ -145,6 +146,16 @@ def savePlotStateOptions(xmlElement, odbDisplay):   # {{{2
         saveXml(addLeaf(xmlElement, 'superimposeOptions'), odbDisplay.superimposeOptions)
             
 
+def saveAnnotations(xmlElement, userData):  # {{{2
+    "Store current annotations"
+    for ann in userData.annotations.values():
+        if isinstance(ann, abaqus.ArrowType):
+            anElement = addLeaf(xmlElement, 'Arrow')
+        else:
+            anElement = addLeaf(xmlElement, 'Text')
+        saveXml(anElement, ann)
+
+
 def saveWindowState(xmlElement, viewport):  # {{{2
     "Store whether the viewport is normal or maximized"
     if MAXIMIZED == viewport.windowState:
@@ -156,19 +167,23 @@ def saveWindowState(xmlElement, viewport):  # {{{2
 
 
 knownObjects = {    # {{{2 What to save and what to skip from each element type
+    'Odb' : [ 'userData' ],
+    'UserData': [ saveAnnotations ],
+    'Text' : [ 'box', 'justification', 'referencePoint', 'color', 'text', 'backgroundStyle',
+        'rotationAngle', 'backgroundColor', 'offset', 'font', 'anchor' ],
     'Viewport': [saveWindowState, 'origin', 'width', 'height', 
         'viewportAnnotationOptions', 'view', 'odbDisplay'],
     'View': ['projection',
         'cameraTarget', 'cameraPosition', 'cameraUpVector',
         'width', 'viewOffsetX', 'viewOffsetY'],
     'OdbDisplay': ['display', savePlotStateOptions, 'commonOptions',
-        saveActiveViewCut ],
+        'viewCutOptions', saveActiveViewCut ],
     'ViewCut': [ saveViewCut ],
     'float' : [],
     'int': [],
     }
 
-skipMembers = ['autoDeformationScaleValue', 'autoMaxValue', 'autoMinValue']
+skipMembers = ['autoDeformationScaleValue', 'autoMaxValue', 'autoMinValue', 'name']
  
 
 def saveXml(xmlElement, abaqusObject):  # {{{2
@@ -212,14 +227,19 @@ def addSessionUserView(xmlView):    # {{{2 Update customData.userViews for the G
     id = str(getUniqueId(xmlView))
     name = str(xmlView.getAttribute('name'))
     datestr = xmlView.getAttribute('dateTime')
+    userData = xmlView.getElementsByTagName('userData')
     if datestr:
         dateTime = iso8601.parse(datestr)
         localtime = iso8601.time.localtime(dateTime)
         datestr = iso8601.time.strftime('%Y-%m-%d %H:%M', localtime)
+    if userData:
+        ud = '*'
+    else:
+        ud = ''
     for od in xmlView.getElementsByTagName("odbDisplay"):
         odbName = str(od.getAttribute('name'))
         abaqus.session.customData.userViews.append(
-                (id, name, datestr, odbName) )
+                (id, name, datestr, odbName, ud) )
 
 
 # {{{1 Functions to restore a view from the database ##########################
@@ -234,9 +254,11 @@ def restoreXml(xmlElement, abaqusObject):
                     xmlChild.getAttribute('type') == u'argument':
                         arguments[str(xmlChild.tagName)] = \
                                 eval(restoreXml(xmlChild, None))
+        if debug:
+            print xmlElement.tagName, "( %r )"%arguments
         try:
             abaqusObject = abaqusObject(**arguments)
-        except:
+        except: # TODO better error checking!
             if arguments.has_key('name'):
                 abaqusObject = abaqusObject(name=arguments['name'])
 
@@ -253,7 +275,12 @@ def restoreXml(xmlElement, abaqusObject):
             text += xmlChild.data
 
     if len(setValues) and hasattr(abaqusObject, 'setValues'):
-        abaqusObject.setValues(**setValues)
+        if debug:
+            print xmlElement.tagName, ".setValues %r"%setValues
+        try:
+            abaqusObject.setValues(**setValues)
+        except TypeError:
+            print xmlElement.tagName, sys.exc_info()[1]
 
     return text.strip()
 
@@ -296,41 +323,6 @@ def writeXmlFile(fileName=viewsCommon.xmlFileName): # {{{2
     delattr(xmldoc, 'changed')
 
 
-def upgradeViews(): # {{{2 Totally obsolete by now
-    "Upgrade from old text file format"
-    import re
-    attrre = re.compile('(\w+)=(\(.*?\)|.*?),')
-    for fn in (viewsCommon.userFileName, viewsCommon.printFileName):
-        if os.path.exists(fn):
-            xmldoc.changed = 1
-            abaqus.milestone('Importing views from %r'%fn)
-            dateTime = iso8601.tostring(os.stat(fn).st_mtime)
-            odbname=None
-            for line in open(fn):
-                line = line.strip()
-                sp = line.split(';')
-                if 1 == len(sp):
-                    odbname = sp[0]
-                else:
-                    userView = addLeaf(xmldoc.documentElement, 'userView')
-                    userView.setAttribute('name', sp[0])
-                    userView.setAttribute('version', 
-                            str(viewsCommon.__version__))
-                    userView.setAttribute('dateTime', dateTime)
-                    getUniqueId(userView)
-                    vpElement = addLeaf(userView, 'Viewport')
-                    vpElement.setAttribute('name', 'Viewport: 1')
-                    viewElement = addLeaf(vpElement, 'view')
-                    for key, value in attrre.findall(sp[1] + ','):
-                        leaf = addLeaf(viewElement, key)
-                        leaf.appendChild(
-                            leaf.ownerDocument.createTextNode(value))
-
-                    odElement = addLeaf(vpElement, 'odbDisplay')
-                    odElement.setAttribute('name', odbname)
-            os.rename(fn, fn + '~')  # prevent parsing next time
-
-
 # {{{1 Abaqus/Viewer plugin functions #########################################
 
 def printToFileCallback(callingObject, args, kws, user):    # {{{2
@@ -345,9 +337,13 @@ def printToFileCallback(callingObject, args, kws, user):    # {{{2
     userView.setAttribute('dateTime', iso8601.tostring(now))
     userView.setAttribute('version', str(viewsCommon.__version__))
 
-    # TODO: Save annotations
     for object in kws['canvasObjects']:
         if isinstance(object, abaqus.ViewportType):
+            if hasattr(object.odbDisplay, 'name'):
+                odb = abaqus.session.odbs[object.odbDisplay.name]
+                if len(odb.userData.annotations):
+                    odbElement = addLeaf(userView, 'Odb')
+                    saveXml(odbElement, odb)
             vpElement = addLeaf(userView, 'Viewport')
             saveXml(vpElement, object)
     addSessionUserView(userView) # pass to gui
@@ -390,7 +386,32 @@ def setView(viewId):    # {{{2 Restore the specified xml userview Id
         else:
             print "No viewports defined."
 
-   
+def setAnnotation(viewId):    # {{{2 Restore annotations from the specified xml userview Id
+    """Retrieve the xmlElement for the identified userView.
+
+    Called by viewManagerDB to restore saved annotations.
+    """
+    xmlView = xmldoc.getElementById(viewId)
+    if not xmlView:
+        print "View %r not in userViews database."%viewId
+        return
+    datestr = xmlView.getAttribute('dateTime')
+    if datestr:
+        dateTime = iso8601.parse(datestr)
+        localtime = iso8601.time.localtime(dateTime)
+        datestr = iso8601.time.strftime('%Y-%m-%d %H:%M', localtime)
+    print xmlView.getAttribute('name'), datestr
+    xmlUserData = xmlView.getElementsByTagName('userData')
+    if not xmlUserData:
+        print "View does not contain annotations."
+        return
+
+    vpObject = abaqus.session.viewports.values()[0]  # current viewport
+    userData = abaqus.session.odbs[vpObject.odbDisplay.name].userData
+    restoreXml(xmlUserData[0], userData)    # XXX only reads first value
+    for ann in userData.annotations.values():    # TODO only plot new annotations
+        vpObject.plotAnnotation(ann)
+
 def deleteViews(viewIds):   # {{{2 Delete a userview from the database
     "Remove the specified views from the database."
     for viewId in viewIds:
@@ -430,7 +451,6 @@ def init(): # {{{2
     import methodCallback
     global xmldoc
     xmldoc = readXmlFile(viewsCommon.xmlFileName)
-    upgradeViews()
 
     # Add to session.customData
     if not hasattr(abaqus.session.customData, "userViews"):
