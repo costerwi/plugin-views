@@ -3,8 +3,6 @@
 """
 # $Id$
 
-__version__ = 0.52
-userFileName = 'userViews.txt'
-printFileName = 'printViews.txt'
+__version__ = 0.53
 xmlFileName = 'userViews.xml'
 
