@@ -218,3 +218,13 @@ def viewSteps():
         viewport.setValues(displayedObject=currentOdb)
         viewport.odbDisplay.setFrame(step.frames[-1])
 
+def resetLayerTransform(viewport=None):
+    """Set layer view transforms to something sane (no transform)"""
+    if not viewport:
+        viewport = session.viewports[session.currentViewportName]
+    for layer in viewport.layers.values():
+        layer.view.setLayerTransform(layerTransform=(1, 0, 0, 0,
+                                                     0, 1, 0, 0,
+                                                     0, 0, 1, 0,
+                                                     0, 0, 0, 1))
+

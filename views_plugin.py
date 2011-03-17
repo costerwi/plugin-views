@@ -50,3 +50,12 @@ toolset.registerKernelMenuButton(
         applicableModules=['Visualization'],
         description='Create a new viewport for each analysis step.')
 
+toolset.registerKernelMenuButton(
+        buttonText='&Views|Reset &layer transforms', 
+        moduleName='views',
+        functionName='resetLayerTransform()',
+        author='Carl Osterwisch',
+        version='0.1',
+        applicableModules=['Visualization'],
+        description='Set layer transforms to 1')
+
