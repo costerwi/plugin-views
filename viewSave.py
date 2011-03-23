@@ -10,6 +10,7 @@ from xml.dom import minidom
 from xml.utils import iso8601 # date/time support
 
 xmldoc = None
+xmlFileName = None
 debug = os.environ.get('DEBUG')
 if debug:
     print "viewSave Debug mode is on"
@@ -166,7 +167,7 @@ def saveWindowState(xmlElement, viewport):  # {{{2
         addLeaf(xmlElement, 'restore')
 
 
-knownObjects = {    # {{{2 What to save and what to skip from each element type
+knownObjects = {    # {{{2 What to save from each element type
     'Odb' : [ 'userData' ],
     'UserData': [ saveAnnotations ],
     'Text' : [ 'box', 'justification', 'referencePoint', 'color', 'text', 'backgroundStyle',
@@ -213,7 +214,7 @@ def saveXml(xmlElement, abaqusObject):  # {{{2
         for attr in members:
             if callable(attr):
                 attr(xmlElement, abaqusObject)
-            else:
+            elif hasattr(abaqusObject, attr):
                 saveXml(addLeaf(xmlElement, attr),
                         getattr(abaqusObject, attr))
     else:
@@ -288,6 +289,7 @@ def restoreXml(xmlElement, abaqusObject):
 
 def readXmlFile(fileName):  # {{{2
     "Read fileName into xmldoc or create a new xmldoc if necessary"
+    global xmldoc, xmlFileName
     if os.path.exists(fileName):
         doc = minidom.parse(fileName)
     else:
@@ -306,14 +308,28 @@ def readXmlFile(fileName):  # {{{2
 #                qualifiedName="userViews",
 #                doctype=doctype)
         doc.changed = 1
-    assert doc.documentElement.tagName == "userViews"
-    return doc
+    fileType = doc.documentElement.tagName
+    if not "userViews" == fileType:
+        return abaqus.getWarningReply(
+                '%r is not userViews file format'%fileType,
+                (abaqus.CANCEL, ))
+    writeXmlFile()  # save any updates to the old document
+    xmldoc = doc
+    xmlFileName = fileName
+    # Clear the old list items (if any)
+    while len(abaqus.session.customData.userViews) > 0:
+        del abaqus.session.customData.userViews[0]
+    # Add new views
+    for view in xmldoc.getElementsByTagName("userView"):
+        addSessionUserView(view)
 
 
-def writeXmlFile(fileName=viewsCommon.xmlFileName): # {{{2
+def writeXmlFile(fileName=None): # {{{2
     "Save the xml document to fileName"
     if not hasattr(xmldoc, 'changed'):
         return
+    if not fileName:
+        fileName=xmlFileName
     if os.path.exists(fileName):
         bkupName = fileName + '~'
         if os.path.exists(bkupName):
@@ -422,7 +438,7 @@ def deleteViews(viewIds):   # {{{2 Delete a userview from the database
             xmldoc.changed = 1
         else:
             print "View %r not in userViews database."%viewId
-    for view in abaqus.session.customData.userViews:
+    for view in reversed(abaqus.session.customData.userViews):
         if view[0] in viewIds:
             abaqus.session.customData.userViews.remove(view)
 
@@ -449,14 +465,11 @@ def init(): # {{{2
     Called by kernelInitString in toolset registration.
     """
     import methodCallback
-    global xmldoc
-    xmldoc = readXmlFile(viewsCommon.xmlFileName)
 
     # Add to session.customData
     if not hasattr(abaqus.session.customData, "userViews"):
         abaqus.session.customData.userViews = customKernel.RegisteredList()
-    for view in xmldoc.getElementsByTagName("userView"):
-        addSessionUserView(view)
+    readXmlFile(viewsCommon.xmlFileName)
 
     print __name__, 'addCallback printToFile'
     methodCallback.addCallback(type(abaqus.session), 'printToFile', 

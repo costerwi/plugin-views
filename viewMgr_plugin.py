@@ -48,8 +48,9 @@ class viewManagerDB(AFXDataDialog):
         ID_NEWVIEW,
         ID_DELVIEW,
         ID_BUTTON_ANNOTATION,
+        ID_BUTTON_FILE,
         ID_LAST
-    ) = range(AFXDataDialog.ID_LAST, AFXDataDialog.ID_LAST + 6)
+    ) = range(AFXDataDialog.ID_LAST, AFXDataDialog.ID_LAST + 7)
 
 
     def __init__(self, form):
@@ -63,7 +64,7 @@ class viewManagerDB(AFXDataDialog):
 
         self.table = myAFXTable(
                 p=mainframe,
-                numVisRows=15,
+                numVisRows=4,
                 numVisColumns=4,
                 numRows=1,
                 numColumns=5,
@@ -97,10 +98,23 @@ class viewManagerDB(AFXDataDialog):
                 opts=LAYOUT_FILL_X)
         FXMAPFUNC(self, SEL_COMMAND, self.ID_FILTER, viewManagerDB.onFilter)
 
-        self.appendActionButton(self.APPLY)
+        self.appendActionButton(text="File...", tgt=self, sel=self.ID_BUTTON_FILE)
+        FXMAPFUNC(self, SEL_COMMAND, self.ID_BUTTON_FILE, viewManagerDB.onButtonFile)
+        btn = self.appendActionButton(self.APPLY)
+        btn.setText("Restore View")
         self.appendActionButton(text="Restore Annotations", tgt=self, sel=self.ID_BUTTON_ANNOTATION)
         FXMAPFUNC(self, SEL_COMMAND, self.ID_BUTTON_ANNOTATION, viewManagerDB.onAnnotation)
         self.appendActionButton(self.DISMISS)
+
+        self.fileDialog = AFXFileDialog(
+                owner=self,
+                title="Select userView database",
+                pathNameTgt=form.fntarget,
+                tgt=form,
+                sel=form.ID_FNTARGET,
+                #mode=AFXSELECTFILE_EXISTING,
+                readOnlyKw=None,
+                patterns="*.xml\nAll Files (*)")
         
 
     def updateTable(self):
@@ -186,6 +200,13 @@ class viewManagerDB(AFXDataDialog):
         return 0
 
 
+    def onButtonFile(self, sender, sel, ptr):
+        "Display the file selector dialog box"
+        self.fileDialog.create()
+        self.fileDialog.showModal()
+        return 0
+
+
     def show(self):
         "Prepare to show the dialog box"
         # Register query and populate the table
@@ -207,21 +228,35 @@ class viewManagerDB(AFXDataDialog):
 ###########################################################################
 class viewManagerForm(AFXForm):
     "Class to launch the views GUI"
+    (
+        ID_FNTARGET,
+        ID_LAST,
+    ) = range(AFXDataDialog.ID_LAST, AFXDataDialog.ID_LAST + 2)
+
     def __init__(self, owner):
 
         AFXForm.__init__(self, owner) # Construct the base class.
                 
         # Commands.
-        cmd = AFXGuiCommand(mode=self, method='setView', objectName='viewSave')
-
-        self.viewId = AFXStringKeyword(command=cmd, 
+        setView = AFXGuiCommand(mode=self, method='setView', objectName='viewSave')
+        self.viewId = AFXStringKeyword(command=setView, 
                 name='viewId',
                 isRequired=TRUE,
                 defaultValue='0')
 
+        self.fntarget = AFXStringTarget()
+        FXMAPFUNC(self, SEL_COMMAND, self.ID_FNTARGET, viewManagerForm.onFileChanged)
+
 
     def getFirstDialog(self):
         return viewManagerDB(self)
+
+
+    def onFileChanged(self, sender, sel, ptr):
+        " Message handler for AFXFileDialog "
+        if sender.getPressedButtonId() == sender.ID_CLICKED_OK:
+            sendCommand("viewSave.readXmlFile(fileName=%r)"%self.fntarget.getValue())
+        return 0
 
 
 ###########################################################################
