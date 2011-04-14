@@ -23,46 +23,69 @@ class viewEditDB(AFXDataDialog):
                 actionButtonIds=self.OK | self.APPLY | self.DISMISS,
                 opts=DIALOG_NORMAL|DECOR_RESIZE)
 
+        va = AFXVerticalAligner(self, opts=LAYOUT_FILL_X)
+
         AFXTextField(
-                p=self,
+                p=va,
+                ncols=10,
+                labelText='fieldOfViewAngle',
+                tgt=form.fieldOfViewAngleKw,
+                opts=LAYOUT_FILL_X)
+
+        AFXTextField(
+                p=va,
+                ncols=10,
+                labelText='nearPlane',
+                tgt=form.nearPlaneKw,
+                opts=LAYOUT_FILL_X)
+
+        AFXTextField(
+                p=va,
                 ncols=10,
                 labelText='cameraTarget',
                 tgt=form.cameraTargetKw,
                 opts=LAYOUT_FILL_X)
 
         AFXTextField(
-                p=self,
+                p=va,
                 ncols=10,
                 labelText='cameraPosition',
                 tgt=form.cameraPositionKw,
                 opts=LAYOUT_FILL_X)
 
         AFXTextField(
-                p=self,
+                p=va,
                 ncols=10,
                 labelText='cameraUpVector',
                 tgt=form.cameraUpVectorKw,
                 opts=LAYOUT_FILL_X)
 
         AFXTextField(
-                p=self,
+                p=va,
                 ncols=10,
                 labelText='viewOffsetX',
                 tgt=form.viewOffsetXKw,
                 opts=LAYOUT_FILL_X)
 
         AFXTextField(
-                p=self,
+                p=va,
                 ncols=10,
                 labelText='viewOffsetY',
                 tgt=form.viewOffsetYKw,
                 opts=LAYOUT_FILL_X)
 
         AFXTextField(
-                p=self,
+                p=va,
                 ncols=10,
                 labelText='width',
                 tgt=form.widthKw,
+                opts=AFXTEXTFIELD_FLOAT|LAYOUT_FILL_X)
+
+        AFXTextField(
+                p=va,
+                ncols=10,
+                labelText='height',
+                tgt=form.heightKw,
                 opts=AFXTEXTFIELD_FLOAT|LAYOUT_FILL_X)
 
 ###########################################################################
@@ -79,6 +102,16 @@ class viewEditForm(AFXForm):
                 method='setValues',
                 objectName='session.viewports[%s].view',
                 registerQuery=TRUE)
+
+        self.fieldOfViewAngleKw = AFXFloatKeyword(
+                command=optionsCmd,
+                name='fieldOfViewAngle',
+                isRequired=FALSE)
+
+        self.nearPlaneKw = AFXFloatKeyword(
+                command=optionsCmd,
+                name='nearPlane',
+                isRequired=FALSE)
 
         self.cameraTargetKw = AFXTupleKeyword(
                 command=optionsCmd,
@@ -116,6 +149,11 @@ class viewEditForm(AFXForm):
                 name='width',
                 isRequired=FALSE)
 
+        self.heightKw = AFXFloatKeyword(
+                command=optionsCmd,
+                name='height',
+                isRequired=FALSE)
+
     def getFirstDialog(self):
         return viewEditDB(self)
 
@@ -124,10 +162,11 @@ class viewEditForm(AFXForm):
 ###########################################################################
 toolset = getAFXApp().getAFXMainWindow().getPluginToolset()
 
-toolset.registerGuiMenuButton(buttonText='&Views|&Edit...', 
-                              object=viewEditForm(toolset),
-                              author='Carl Osterwisch',
-                              version=str(0.2),
-                              applicableModules=abaqusConstants.ALL,
-                              description='Edit current view vectors.'
-                              )
+toolset.registerGuiMenuButton(
+    buttonText='&Views|&Edit...', 
+    object=viewEditForm(toolset),
+    author='Carl Osterwisch',
+    version=str(0.3),
+    applicableModules=abaqusConstants.ALL,
+    description='Edit parameters for the current viewport view.',
+    )
