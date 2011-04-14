@@ -270,5 +270,5 @@ toolset.registerGuiMenuButton(
         kernelInitString='import viewSave; viewSave.init()',
         author='Carl Osterwisch',
         version=str(viewsCommon.__version__),
-        applicableModules=abaqusConstants.ALL,
+        applicableModules=['Visualization'],
         description='Store and retrieve custom viewport views.')
