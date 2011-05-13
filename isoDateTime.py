@@ -17,7 +17,8 @@ class tzUTC(datetime.tzinfo):
 class tzLocal(datetime.tzinfo):
     """First attempt at something that might make sense"""
     def __init__(self):
-        time.tzset()    # Reset the time conversion rules based on TZ
+        if hasattr(time, 'tzset'):
+            time.tzset()    # Reset the time conversion rules based on TZ
         self.tz_offset = datetime.timedelta(seconds=-time.timezone)
         self.dst_offset = datetime.timedelta(seconds=time.timezone - time.altzone)
 
@@ -47,12 +48,19 @@ class tzLocal(datetime.tzinfo):
         """Return local time offset in minutes east of UTC"""
         return self.tz_offset + self.dst(dt)
 
+UTC = tzUTC()
+local = tzLocal()
 
-def tostring(secs):
+def tostring(sometime):
     """Return UTC iso8601 format"""
 
     isofmt = "%Y-%m-%dT%H:%M:%SZ"
-    return time.strftime(isofmt, time.gmtime(secs))
+    if isinstance(sometime, float):
+        sometime = datetime.datetime.fromtimestamp(sometime, UTC)
+    elif isinstance(sometime, datetime.datetime) and sometime.tzinfo:
+        sometime = sometime.astimezone(UTC)
+
+    return sometime.strftime(isofmt)
 
 
 def parse(datestring):
@@ -73,12 +81,10 @@ if __name__ == '__main__':
     isofmt="%Y-%m-%dT%H:%M:%S%Z"
     example = "2011-03-23T17:33:30.50Z"
 
-    UTC = tzUTC()
     secs = parse(example)
     print example, tostring(secs)
     parsed = datetime.datetime.fromtimestamp(secs, UTC)
 
-    local = tzLocal()
     n = datetime.datetime.now().replace(tzinfo=local)
 
     print parsed.isoformat()
