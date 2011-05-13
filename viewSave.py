@@ -7,7 +7,10 @@ import customKernel # for registered list of userViews
 import os
 import sys
 from xml.dom import minidom
-from xml.utils import iso8601 # date/time support
+try:
+    from xml.utils import iso8601 # date/time support
+except ImportError:
+    import isoDateTime as iso8601
 
 xmldoc = None
 xmlFileName = None
