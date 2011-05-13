@@ -1,46 +1,51 @@
 # $Id$
 from abaqus import *
 from abaqusConstants import *
-import Numeric
+try:
+    import numpy as np
+except ImportError:
+    # Abaqus versions < 6.10-ef use the older Numeric module.
+    import Numeric as np
+
+    def cross(a, b):
+        " Vector cross product as in Matlab "
+        return np.array([ a[1]*b[2] - a[2]*b[1],
+                          a[2]*b[0] - a[0]*b[2],
+                          a[0]*b[1] - a[1]*b[0] ])
+    np.cross = cross
 
 def norm(v):
     " Vector length as in Matlab "
-    return Numeric.sqrt(Numeric.sum(v*v))
-
-def cross(a, b):
-    " Vector cross product as in Matlab "
-    return Numeric.array([ a[1]*b[2] - a[2]*b[1],
-                           a[2]*b[0] - a[0]*b[2],
-                           a[0]*b[1] - a[1]*b[0] ])
+    return np.sqrt(np.sum(v*v, axis=-1))
 
 def rotateVector(point, vector, th):
     """Calculate rotation of "point" around arbitrary "vector" by radian angle "th".
 
     http://www.mines.edu/~gmurray/ArbitraryAxisRotation/ArbitraryAxisRotation.html
     """
-    [x, y, z] = point
-    [u, v, w] = vector
-    a = Numeric.array([ [x*(v*v + w*w) - u*(v*y + w*z), -w*y + v*z],
-                        [y*(u*u + w*w) - v*(u*x + w*z),  w*x - u*z],
-                        [z*(u*u + v*v) - w*(u*x + v*y), -v*x + u*y] ])
-    a = point*Numeric.sum(point*vector) + \
-            Numeric.matrixmultiply(a, [cos(th), norm(vector)*sin(th)])
-    return a/Numeric.sum(vector*vector)
+    x, y, z = point
+    u, v, w = vector
+    a = np.array([ [x*(v*v + w*w) - u*(v*y + w*z), -w*y + v*z],
+                   [y*(u*u + w*w) - v*(u*x + w*z),  w*x - u*z],
+                   [z*(u*u + v*v) - w*(u*x + v*y), -v*x + u*y] ])
+    a = point*np.sum(point*vector) + \
+            np.dot(a, [cos(th), norm(vector)*sin(th)])
+    return a/np.sum(vector*vector)
 
 def behind(viewport=None):
     """Flip the view 180 degrees (look behind)"""
     if not viewport:
         viewport = session.viewports[session.currentViewportName]
-    target = Numeric.array(viewport.view.cameraTarget)
-    pos = Numeric.array(viewport.view.cameraPosition)
+    target = np.array(viewport.view.cameraTarget)
+    pos = np.array(viewport.view.cameraPosition)
     viewport.view.setValues(cameraPosition=2*target - pos)
 
 def modelPan(vector, viewport=None):
     """Shift viewing target using model coordinates"""
     if not viewport:
         viewport = session.viewports[session.currentViewportName]
-    target = Numeric.array(viewport.view.cameraTarget)
-    pos = Numeric.array(viewport.view.cameraPosition)
+    target = np.array(viewport.view.cameraTarget)
+    pos = np.array(viewport.view.cameraPosition)
     viewport.view.setValues(
             cameraPosition=pos + vector,
             cameraTarget=target + vector)
@@ -50,12 +55,12 @@ def cutViewNormal(viewport=None, cutName="Viewnormal"):
     if not viewport:
         viewport = session.viewports[session.currentViewportName]
     odbDisplay = viewport.odbDisplay
-    viewVector = Numeric.array(viewport.view.viewVector)
+    viewVector = np.array(viewport.view.viewVector)
     if odbDisplay.viewCuts.has_key(cutName):
         viewCut = odbDisplay.viewCuts[cutName]
         viewCut.setValues(
             normal=-viewVector,
-            axis2=cross(-viewVector,
+            axis2=np.cross(-viewVector,
                 viewport.view.cameraUpVector))
     else:
         viewCut = odbDisplay.ViewCut(
@@ -63,7 +68,7 @@ def cutViewNormal(viewport=None, cutName="Viewnormal"):
             shape=PLANE,
             origin=viewport.view.cameraTarget,
             normal=-viewVector,
-            axis2=cross(-viewVector,
+            axis2=np.cross(-viewVector,
                 viewport.view.cameraUpVector))
 
 
@@ -172,18 +177,18 @@ def viewCutNormal(viewport=None):
                     axis2 = csys.xAxis
             else:
                 # cut is defined by points
-                origin = Numeric.array(viewCut.origin)
-                normal = Numeric.array(viewCut.normal)
-                axis2 = Numeric.array(viewCut.axis2)
+                origin = np.array(viewCut.origin)
+                normal = np.array(viewCut.normal)
+                axis2 = np.array(viewCut.axis2)
 
             if viewCut.motion == ROTATE:
                 # cut is rotated by some angle
                 if viewCut.rotationAxis == AXIS_2:
                     normal = rotateVector(normal, axis2, viewCut.angle*pi/180)
                 else:
-                    axis3 = cross(normal, axis2)
+                    axis3 = np.cross(normal, axis2)
                     normal = rotateVector(normal, axis3, viewCut.angle*pi/180)
-                    axis2 = cross(axis3, normal)
+                    axis2 = np.cross(axis3, normal)
 
             if viewCut.showModelAboveCut and not viewCut.showModelBelowCut:
                 # look at the back of the cut
@@ -191,13 +196,12 @@ def viewCutNormal(viewport=None):
                 axis2 = -1*axis2
 
             target = viewport.view.cameraTarget
-            dist = norm(Numeric.array(viewport.view.cameraPosition) -
-                    target)
+            dist = norm(np.array(viewport.view.cameraPosition) - target)
 
             viewport.view.setValues(
                     #cameraTarget=origin,
                     cameraPosition=target + dist*normal/norm(normal),
-                    cameraUpVector=cross(normal, axis2))
+                    cameraUpVector=np.cross(normal, axis2))
 
             break   # stop searching for the active view cut
 
