@@ -1,6 +1,8 @@
 # $Id$
-from abaqus import *
+
+from abaqus import session
 from abaqusConstants import *
+
 try:
     import numpy as np
 except ImportError:

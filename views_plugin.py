@@ -9,7 +9,7 @@ toolset.registerKernelMenuButton(
         moduleName='views',
         functionName='synchVps()',
         author='Carl Osterwisch',
-        version='0.2',
+        version='0.21',
         applicableModules=['Visualization'],
         description='Copy current viewport options to the others.')
 
@@ -18,7 +18,7 @@ toolset.registerKernelMenuButton(
         moduleName='views',
         functionName='cutViewNormal()',
         author='Carl Osterwisch',
-        version='0.2',
+        version='0.21',
         applicableModules=['Visualization'],
         description='Cut normal to the current view.')
 
@@ -27,7 +27,7 @@ toolset.registerKernelMenuButton(
         moduleName='views',
         functionName='viewCutNormal()',
         author='Carl Osterwisch',
-        version='0.2',
+        version='0.21',
         applicableModules=['Visualization'],
         description='Orient view normal to current ' +
                     'cutting plane.')
@@ -37,7 +37,7 @@ toolset.registerKernelMenuButton(
         moduleName='views',
         functionName='behind()',
         author='Carl Osterwisch',
-        version='0.2',
+        version='0.21',
         applicableModules=['Visualization'],
         description='Flip the view 180 degrees (look behind)')
 
@@ -46,7 +46,7 @@ toolset.registerKernelMenuButton(
         moduleName='views',
         functionName='viewSteps()',
         author='Carl Osterwisch',
-        version='0.2',
+        version='0.21',
         applicableModules=['Visualization'],
         description='Create a new viewport for each analysis step.')
 
@@ -55,7 +55,7 @@ toolset.registerKernelMenuButton(
         moduleName='views',
         functionName='resetLayerTransform()',
         author='Carl Osterwisch',
-        version='0.2',
+        version='0.21',
         applicableModules=['Visualization'],
         description='Set layer transforms to 1')
 
