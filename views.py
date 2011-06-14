@@ -1,5 +1,9 @@
-# $Id$
+"""Various kernel functions called from Abaqus/Viewer plugins to manipulate
+the point of view.
 
+Carl Osterwisch, 2005 vim: set modeline foldmethod=indent fdn=1:
+$Id$
+"""
 from abaqus import session
 from abaqusConstants import *
 
@@ -72,7 +76,6 @@ def cutViewNormal(viewport=None, cutName="Viewnormal"):
             normal=-viewVector,
             axis2=np.cross(-viewVector,
                 viewport.view.cameraUpVector))
-
 
 def synchVps(basevp=None):
     """ Synchronize all other viewports to the given or current viewport """
@@ -150,7 +153,6 @@ def synchVps(basevp=None):
                 normal=viewCut.normal,
                 axis2=viewCut.axis2)
             othervc.setValues(**viewCutAttrs)
-
 
 def viewCutNormal(viewport=None):
     """Orient the view to be perpendicular to the active cutting plane."""
