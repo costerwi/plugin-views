@@ -299,6 +299,7 @@ def readXmlFile(fileName):  # {{{2
         # Create a new document
         doc = minidom.parseString('<?xml version="1.0" ?>\n'
             '<!DOCTYPE userViews [<!ATTLIST userView id ID #IMPLIED>]>\n'
+            '<!-- Saved settings for the View Manager Abaqus plugin -->\n'
             '<userViews />')
 #        impl = minidom.getDOMImplementation()
 #        doctype = impl.createDocumentType(
