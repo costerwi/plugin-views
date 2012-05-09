@@ -212,6 +212,7 @@ def viewCutNormal(viewport=None):
 def viewSteps():
     """ Create and assign a separate viewport for each analysis step. """
     currentvp = session.viewports[session.currentViewportName]
+    currentvp.restore()
     odbname = currentvp.odbDisplay.name
     currentOdb = session.odbs[odbname]
     viewid = 1
@@ -225,6 +226,19 @@ def viewSteps():
         viewport=session.viewports[vpname]
         viewport.setValues(displayedObject=currentOdb)
         viewport.odbDisplay.setFrame(step.frames[-1])
+
+def tileVertical():
+    """ Arrange visible viewports side-by-side """
+    vpNames = [vp.name for vp in session.viewports.values() 
+            if MINIMIZED != vp.windowState]
+    vpNames.sort()
+    da = session.drawingArea
+    width = da.width/len(vpNames)
+    for i, vpName in enumerate(vpNames):
+        vp = session.viewports[vpName]
+        vp.restore()    # ensure windowState is NORMAL (not MAXIMIZED)
+        vp.setValues(height = da.height, width = width,
+                origin=(i*width + da.origin[0], da.origin[1]))
 
 def resetLayerTransform(viewport=None):
     """Set layer view transforms to something sane (no transform)"""

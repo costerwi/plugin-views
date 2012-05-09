@@ -51,6 +51,15 @@ toolset.registerKernelMenuButton(
         description='Create a new viewport for each analysis step.')
 
 toolset.registerKernelMenuButton(
+        buttonText='&Views|Tile &vertical', 
+        moduleName='views',
+        functionName='tileVertical()',
+        author='Carl Osterwisch',
+        version='0.1',
+        applicableModules=['Visualization'],
+        description='Arrange visible viewports side-by-side.')
+
+toolset.registerKernelMenuButton(
         buttonText='&Views|Reset &layer transforms', 
         moduleName='views',
         functionName='resetLayerTransform()',
