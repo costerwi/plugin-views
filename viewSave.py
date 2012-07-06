@@ -185,6 +185,8 @@ knownObjects = {    # {{{2 What to save from each element type
     'ViewCut': [ saveViewCut ],
     'float' : [],
     'int': [],
+    "'symbolicConstants.AbaqusBoolean": [],
+    "'symbolicConstants.SymbolicConstant": [],
     }
 
 skipMembers = ['autoDeformationScaleValue', 'autoMaxValue', 'autoMinValue', 'name']
@@ -205,7 +207,7 @@ def saveXml(xmlElement, abaqusObject):  # {{{2
         # Try to figure out which members to save for this object type
         members = knownObjects.setdefault(typeName, [])
         for a in dir(abaqusObject):
-            if not a.startswith('__') \
+            if not a.startswith('_') \
                     and not a in skipMembers \
                     and not callable(getattr(abaqusObject, a)):
                 members.append(a)
@@ -215,6 +217,8 @@ def saveXml(xmlElement, abaqusObject):  # {{{2
     if len(members):
         # Complex type with data members
         for attr in members:
+            if debug:
+                print "saving member %r"%attr
             if callable(attr):
                 attr(xmlElement, abaqusObject)
             elif hasattr(abaqusObject, attr):
