@@ -338,12 +338,11 @@ def writeXmlFile(fileName=None): # {{{2
         return
     if not fileName:
         fileName=xmlFileName
+    bkupName = fileName + '~'
+    open(bkupName, 'w').write(xmldoc.toxml())
     if os.path.exists(fileName):
-        bkupName = fileName + '~'
-        if os.path.exists(bkupName):
-            os.remove(bkupName)
-        os.rename(fileName, bkupName)
-    open(fileName, 'w').write(xmldoc.toxml())
+        os.remove(fileName)
+    os.rename(bkupName, fileName)
     delattr(xmldoc, 'changed')
 
 
