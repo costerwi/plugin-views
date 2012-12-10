@@ -3,7 +3,7 @@
 import time
 import datetime
 
-__version__ = '0.1'
+__version__ = '0.2'
 
 class tzUTC(datetime.tzinfo):
     """UTC"""
@@ -55,10 +55,11 @@ def tostring(sometime):
     """Return UTC iso8601 format"""
 
     isofmt = "%Y-%m-%dT%H:%M:%SZ"
-    if isinstance(sometime, float):
+    if isinstance(sometime, datetime.datetime):
+        if sometime.tzinfo:
+            sometime = sometime.astimezone(UTC)
+    else: # assumed to be seconds since epoch
         sometime = datetime.datetime.fromtimestamp(sometime, UTC)
-    elif isinstance(sometime, datetime.datetime) and sometime.tzinfo:
-        sometime = sometime.astimezone(UTC)
 
     return sometime.strftime(isofmt)
 
@@ -68,11 +69,16 @@ def parse(datestring):
 
     import re
     import calendar
-    isore = re.compile("(\d+)-(\d+)-(\d+).(\d+):(\d+):(\d+)(.\d+)?(.*)")
+    isore = re.compile("(\d+)-(\d+)-(\d+).(\d+):(\d+):([\d.]+)(.*)")
     m = isore.match(datestring)
     if m:
-        year, month, day, hour, minute, second = map(int, m.groups()[:6])
-        return calendar.timegm( (year, month, day, hour, minute, second, 0, 0, 0) )
+        year, month, day, hour, minute = map(int, m.groups()[:5])
+        second = float(m.group(6))
+        secs = calendar.timegm( (year, month, day, hour, minute, second, 0, 0, 0) )
+        tz = m.group(7)
+        if tz and 'z' != tz[0].lower():
+            pass # match -5:00, adjust secs
+        return secs
     else:
         return None
 
@@ -82,14 +88,18 @@ if __name__ == '__main__':
     example = "2011-03-23T17:33:30.50Z"
 
     secs = parse(example)
-    print example, tostring(secs)
+    print "example =       ", example
+    print "secs = parse(example) =", secs
+    print "tostring(secs) =", tostring(secs)
     parsed = datetime.datetime.fromtimestamp(secs, UTC)
+    print "parsed = fromtimestamp(secs, UTC)    =", parsed
+    print "parsed.isoformat()                   =", parsed.isoformat()
+    print "parsed.astimezone(local).isoformat() =", parsed.astimezone(local).isoformat()
 
-    n = datetime.datetime.now().replace(tzinfo=local)
-
-    print parsed.isoformat()
-    print parsed.astimezone(local).isoformat()
-    print local.utcoffset(n)
-    print n.isoformat()
-    print n.strftime(isofmt)
-    print n.astimezone(UTC).strftime(isofmt)
+    # Get current local time and assign local time zone to it
+    print "Testing datetime module"
+    now = datetime.datetime.now().replace(tzinfo=local)
+    print "local.utcoffset(now) =", local.utcoffset(now)
+    print "now.isoformat()      =", now.isoformat()
+    print "now.strftime(isofmt) =", now.strftime(isofmt)
+    print "now.astimezone(UTC).strftime(isofmt) =", now.astimezone(UTC).strftime(isofmt)
