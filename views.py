@@ -215,30 +215,72 @@ def viewSteps():
     currentvp.restore()
     odbname = currentvp.odbDisplay.name
     currentOdb = session.odbs[odbname]
+    steps = [step for step in currentOdb.steps.values()
+            if len(step.frames) > 0]
     viewid = 1
-    while len(session.viewports) < len(currentOdb.steps):
+    while len(session.viewports) < len(steps):
         while session.viewports.has_key('Viewport: %d'%viewid):
             viewid += 1
         session.Viewport(name='Viewport: %d'%viewid)
     sortednames = session.viewports.keys()
     sortednames.sort()
-    for (step, vpname) in zip(currentOdb.steps.values(), sortednames):
+    for (step, vpname) in zip(steps, sortednames):
         viewport=session.viewports[vpname]
         viewport.setValues(displayedObject=currentOdb)
         viewport.odbDisplay.setFrame(step.frames[-1])
 
+def viewOdbs():
+    """ Create and assign a separate viewport for each open odb. """
+    viewid = 1
+    while len(session.viewports) < len(session.odbs):
+        while session.viewports.has_key('Viewport: %d'%viewid):
+            viewid += 1
+        session.Viewport(name='Viewport: %d'%viewid)
+    for (odb, viewport) in zip(
+            session.odbs.values(), session.viewports.values()):
+        viewport.setValues(displayedObject=odb)
+
 def tileVertical():
     """ Arrange visible viewports side-by-side """
-    vpNames = [vp.name for vp in session.viewports.values() 
+    viewports = [vp for vp in session.viewports.values() 
             if MINIMIZED != vp.windowState]
-    vpNames.sort()
+    viewports.sort(key=lambda vp: vp.origin)    # sort by current position
     da = session.drawingArea
-    width = da.width/len(vpNames)
-    for i, vpName in enumerate(vpNames):
-        vp = session.viewports[vpName]
+    width = da.width/len(viewports)
+    previousvp = None
+    for i, vp in enumerate(viewports):
         vp.restore()    # ensure windowState is NORMAL (not MAXIMIZED)
         vp.setValues(height = da.height, width = width,
                 origin=(i*width + da.origin[0], da.origin[1]))
+        # default annotation options
+        triad = OFF
+        compass = OFF
+        legend = ON
+        title = ON
+        state = ON
+        if previousvp and hasattr(previousvp.odbDisplay, 'fieldFrame') and hasattr(vp.odbDisplay, 'fieldFrame'):
+            if previousvp.displayedObject == vp.displayedObject:
+                title = OFF
+                if previousvp.odbDisplay.fieldFrame == vp.odbDisplay.fieldFrame:
+                    state = OFF
+            legend = previousvp.odbDisplay.primaryVariable != vp.odbDisplay.primaryVariable
+            co0 = previousvp.odbDisplay.contourOptions
+            co1 = vp.odbDisplay.contourOptions
+            for attr in ('maxAutoCompute', 'minAutoCompute', 'contourType',
+                    'numIntervals', 'intervalType', 'maxValue', 'minValue'):
+                legend |= getattr(co0, attr) != getattr(co1, attr)
+            legend |= co0.minAutoCompute | co0.maxAutoCompute
+
+        vp.viewportAnnotationOptions.setValues(
+                triad=triad,
+                compass=compass,
+                legend=legend,
+                title=title,
+                state=state)
+        previousvp = vp
+    # special treatment for rightmost viewport
+    previousvp.viewportAnnotationOptions.setValues(
+            triad=ON, compass=ON)
 
 def resetLayerTransform(viewport=None):
     """Set layer view transforms to something sane (no transform)"""

@@ -46,7 +46,16 @@ toolset.registerKernelMenuButton(
         moduleName='views',
         functionName='viewSteps()',
         author='Carl Osterwisch',
-        version='0.21',
+        version='0.22',
+        applicableModules=['Visualization'],
+        description='Create a new viewport for each analysis step.')
+
+toolset.registerKernelMenuButton(
+        buttonText='&Views|View &odbs', 
+        moduleName='views',
+        functionName='viewOdbs()',
+        author='Carl Osterwisch',
+        version='0.1',
         applicableModules=['Visualization'],
         description='Create a new viewport for each analysis step.')
 
@@ -55,7 +64,7 @@ toolset.registerKernelMenuButton(
         moduleName='views',
         functionName='tileVertical()',
         author='Carl Osterwisch',
-        version='0.1',
+        version='0.2',
         applicableModules=['Visualization'],
         description='Arrange visible viewports side-by-side.')
 
