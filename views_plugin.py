@@ -1,8 +1,8 @@
 """Register the Abaqus kernel methods from views.py"""
 
-import abaqusGui
+from abaqusGui import *
 
-toolset = abaqusGui.getAFXApp().getAFXMainWindow().getPluginToolset()
+toolset = getAFXApp().getAFXMainWindow().getPluginToolset()
 
 toolset.registerKernelMenuButton(
         buttonText='&Views|&Synchronize', 
@@ -77,3 +77,42 @@ toolset.registerKernelMenuButton(
         applicableModules=['Visualization'],
         description='Set layer transforms to 1')
 
+
+class viewCutDatumProcedure(AFXProcedure):
+    def __init__(self, owner):
+        # Construct the base class
+        AFXProcedure.__init__(self, owner)
+
+        # Command
+        viewCutCommand = AFXGuiCommand(mode=self,
+                method='viewCutDatum',
+                objectName='views',
+                registerQuery=FALSE)
+
+        # Keywords
+        self.datumKw = AFXObjectKeyword(
+                command=viewCutCommand,
+                name='datum',
+                isRequired=TRUE)
+
+        viewCutCommand.setKeywordValuesToDefaults()
+
+
+    def getFirstStep(self):
+        return AFXPickStep(
+                owner=self,
+                keyword=self.datumKw,
+                prompt="Select datum plane",
+                entitiesToPick=DATUM_PLANES,
+                numberToPick=ONE,
+                sequenceStyle=ARRAY)    # TUPLE or ARRAY
+
+toolset.registerGuiMenuButton(
+        buttonText='&Views|Cut from &datum plane',
+        object=viewCutDatumProcedure(toolset),
+        kernelInitString='import views',
+        author='Carl Osterwisch',
+        version='0.1',
+        applicableModules=['Assembly'],
+        description='Create view cut from selected datum plane.'
+        )

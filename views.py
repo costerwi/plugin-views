@@ -209,6 +209,30 @@ def viewCutNormal(viewport=None):
 
             break   # stop searching for the active view cut
 
+def viewCutDatum(datum, cutName="DatumCut"):
+    """Create a view cut from a datum plane"""
+    viewport = session.viewports[session.currentViewportName]
+    display = viewport.assemblyDisplay
+    origin = np.asarray(datum.pointOn)
+    normal = np.asarray(datum.normal)
+    for v in (0,1,0), (0,0,1), (1,0,0):
+        if abs(np.dot(v, normal)) < 0.5: # Dissimilar directions
+            break
+    if display.viewCuts.has_key(cutName):
+        viewCut = display.viewCuts[cutName]
+        viewCut.setValues(
+            origin = origin,
+            normal = normal,
+            axis2 = np.cross(v, normal) )
+    else:
+        display.ViewCut(
+            name = cutName,
+            shape = PLANE,
+            origin = origin,
+            normal = normal,
+            axis2 = np.cross(v, normal) )
+
+
 def viewSteps():
     """ Create and assign a separate viewport for each analysis step. """
     currentvp = session.viewports[session.currentViewportName]
