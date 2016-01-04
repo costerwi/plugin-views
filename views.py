@@ -225,13 +225,14 @@ def viewCutDatum(datum, cutName="DatumCut"):
             normal = normal,
             axis2 = np.cross(v, normal) )
     else:
-        display.ViewCut(
+        viewCut = display.ViewCut(
             name = cutName,
             shape = PLANE,
             origin = origin,
             normal = normal,
             axis2 = np.cross(v, normal) )
-
+    viewCut.setValues(motion=TRANSLATE, position=0)
+    display.setValues(activeCutName=cutName, viewCut=ON)
 
 def viewSteps():
     """ Create and assign a separate viewport for each analysis step. """

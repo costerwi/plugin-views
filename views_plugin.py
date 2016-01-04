@@ -108,7 +108,7 @@ class viewCutDatumProcedure(AFXProcedure):
                 sequenceStyle=ARRAY)    # TUPLE or ARRAY
 
 toolset.registerGuiMenuButton(
-        buttonText='&Views|Cut from &datum plane',
+        buttonText='&Views|Cut from &datum plane...',
         object=viewCutDatumProcedure(toolset),
         kernelInitString='import views',
         author='Carl Osterwisch',
