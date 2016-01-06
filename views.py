@@ -234,6 +234,21 @@ def viewCutDatum(datum, cutName="DatumCut"):
     viewCut.setValues(motion=TRANSLATE, position=0)
     display.setValues(activeCutName=cutName, viewCut=ON)
 
+def viewCutPoint(point):
+    """Adjust current viewCut to pass through given point"""
+    viewport = session.viewports[session.currentViewportName]
+    display = viewport.assemblyDisplay
+    for viewCut in display.viewCuts.values():
+        if not viewCut.active:
+            continue
+        if viewCut.shape != PLANE:
+            continue # throw an error here?
+        if viewCut.motion == TRANSLATE:
+            pos = np.dot(np.asarray(point.pointOn) - viewCut.origin,
+                    viewCut.normal)
+            viewCut.setValues(position=float(pos))
+        # TODO ROTATE
+
 def viewSteps():
     """ Create and assign a separate viewport for each analysis step. """
     currentvp = session.viewports[session.currentViewportName]

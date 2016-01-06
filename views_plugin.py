@@ -38,7 +38,7 @@ toolset.registerKernelMenuButton(
         functionName='behind()',
         author='Carl Osterwisch',
         version='0.21',
-        applicableModules=['Visualization'],
+        applicableModules=['Visualization', 'Assembly', 'Part'],
         description='Flip the view 180 degrees (look behind)')
 
 toolset.registerKernelMenuButton(
@@ -116,3 +116,44 @@ toolset.registerGuiMenuButton(
         applicableModules=['Assembly'],
         description='Create view cut from selected datum plane.'
         )
+
+
+class viewCutPointProcedure(AFXProcedure):
+    def __init__(self, owner):
+        # Construct the base class
+        AFXProcedure.__init__(self, owner)
+
+        # Command
+        viewCutCommand = AFXGuiCommand(mode=self,
+                method='viewCutPoint',
+                objectName='views',
+                registerQuery=FALSE)
+
+        # Keywords
+        self.pointKw = AFXObjectKeyword(
+                command=viewCutCommand,
+                name='point',
+                isRequired=TRUE)
+
+        viewCutCommand.setKeywordValuesToDefaults()
+
+    def getFirstStep(self):
+        return AFXPickStep(
+                owner=self,
+                keyword=self.pointKw,
+                prompt="Select point",
+                entitiesToPick=VERTICES, # TODO extend to other types
+                numberToPick=ONE,
+                sequenceStyle=ARRAY)    # TUPLE or ARRAY
+
+
+toolset.registerGuiMenuButton(
+        buttonText='&Views|Cut through point...',
+        object=viewCutPointProcedure(toolset),
+        kernelInitString='import views',
+        author='Carl Osterwisch',
+        version='0.1',
+        applicableModules=['Assembly'],
+        description='Adjust cut position to pass through given point.'
+        )
+
