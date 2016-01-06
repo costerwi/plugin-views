@@ -38,6 +38,18 @@ def rotateVector(point, vector, th):
             np.dot(a, [cos(th), norm(vector)*sin(th)])
     return a/np.sum(vector*vector)
 
+def getViewportDisplay(viewport=None):
+    """Return current viewport and display"""
+    if not viewport:
+        viewport = session.viewports[session.currentViewportName]
+    display = viewport.odbDisplay
+    o = viewport.displayedObject
+    if hasattr(o, 'Instance'):
+        display = viewport.assemblyDisplay
+    elif hasattr(o, 'AutoRepair'):
+        display = viewport.partDisplay
+    return viewport, display
+
 def behind(viewport=None):
     """Flip the view 180 degrees (look behind)"""
     if not viewport:
@@ -58,24 +70,24 @@ def modelPan(vector, viewport=None):
 
 def cutViewNormal(viewport=None, cutName="Viewnormal"):
     """Create a cut normal to the current view."""
-    if not viewport:
-        viewport = session.viewports[session.currentViewportName]
-    odbDisplay = viewport.odbDisplay
+    viewport, display = getViewportDisplay()
     viewVector = np.array(viewport.view.viewVector)
-    if odbDisplay.viewCuts.has_key(cutName):
-        viewCut = odbDisplay.viewCuts[cutName]
+    if display.viewCuts.has_key(cutName):
+        viewCut = display.viewCuts[cutName]
         viewCut.setValues(
             normal=-viewVector,
             axis2=np.cross(-viewVector,
                 viewport.view.cameraUpVector))
     else:
-        viewCut = odbDisplay.ViewCut(
+        viewCut = display.ViewCut(
             name=cutName,
             shape=PLANE,
             origin=viewport.view.cameraTarget,
             normal=-viewVector,
             axis2=np.cross(-viewVector,
                 viewport.view.cameraUpVector))
+    viewCut.setValues(motion=TRANSLATE, position=0)
+    display.setValues(activeCutName=cutName, viewCut=ON)
 
 def synchVps(basevp=None):
     """ Synchronize all other viewports to the given or current viewport """
@@ -156,63 +168,61 @@ def synchVps(basevp=None):
 
 def viewCutNormal(viewport=None):
     """Orient the view to be perpendicular to the active cutting plane."""
-    if not viewport:
-        viewport = session.viewports[session.currentViewportName]
-    odbDisplay = viewport.odbDisplay
-    for viewCut in odbDisplay.viewCuts.values():
-        if viewCut.active:
-            if viewCut.shape != PLANE:
+    viewport, display = getViewportDisplay(viewport)
+    for viewCut in display.viewCuts.values():
+        if not viewCut.active:
+            continue
+        if viewCut.shape != PLANE:
+            continue # throw an error here?
+        if hasattr(viewCut, 'csysName') and viewCut.csysName:
+            # Find the csys which defines this cut
+            scratchOdb = session.scratchOdbs[odbDisplay.name]
+            csys = scratchOdb.rootAssembly.datumCsyses[viewCut.csysName]
+            if csys.type != CARTESIAN:
                 continue # throw an error here?
-            if viewCut.csysName:
-                # Find the csys which defines this cut
-                scratchOdb = session.scratchOdbs[odbDisplay.name]
-                csys = scratchOdb.rootAssembly.datumCsyses[viewCut.csysName]
-                if csys.type != CARTESIAN:
-                    continue # throw an error here?
-                origin = csys.origin
-                if AXIS_1 == viewCut.normal:
-                    normal = csys.xAxis
-                    axis2 = csys.yAxis
-                elif AXIS_2 == viewCut.normal:
-                    normal = csys.yAxis
-                    axis2 = csys.zAxis
-                else:
-                    normal = csys.zAxis
-                    axis2 = csys.xAxis
+            origin = csys.origin
+            if AXIS_1 == viewCut.normal:
+                normal = csys.xAxis
+                axis2 = csys.yAxis
+            elif AXIS_2 == viewCut.normal:
+                normal = csys.yAxis
+                axis2 = csys.zAxis
             else:
-                # cut is defined by points
-                origin = np.array(viewCut.origin)
-                normal = np.array(viewCut.normal)
-                axis2 = np.array(viewCut.axis2)
+                normal = csys.zAxis
+                axis2 = csys.xAxis
+        else:
+            # cut is defined by points
+            origin = np.array(viewCut.origin)
+            normal = np.array(viewCut.normal)
+            axis2 = np.array(viewCut.axis2)
 
-            if viewCut.motion == ROTATE:
-                # cut is rotated by some angle
-                if viewCut.rotationAxis == AXIS_2:
-                    normal = rotateVector(normal, axis2, viewCut.angle*pi/180)
-                else:
-                    axis3 = np.cross(normal, axis2)
-                    normal = rotateVector(normal, axis3, viewCut.angle*pi/180)
-                    axis2 = np.cross(axis3, normal)
+        if viewCut.motion == ROTATE:
+            # cut is rotated by some angle
+            if viewCut.rotationAxis == AXIS_2:
+                normal = rotateVector(normal, axis2, viewCut.angle*pi/180)
+            else:
+                axis3 = np.cross(normal, axis2)
+                normal = rotateVector(normal, axis3, viewCut.angle*pi/180)
+                axis2 = np.cross(axis3, normal)
 
-            if viewCut.showModelAboveCut and not viewCut.showModelBelowCut:
-                # look at the back of the cut
-                normal = -1*normal
-                axis2 = -1*axis2
+        if viewCut.showModelAboveCut and not viewCut.showModelBelowCut:
+            # look at the back of the cut
+            normal = -1*normal
+            axis2 = -1*axis2
 
-            target = viewport.view.cameraTarget
-            dist = norm(np.array(viewport.view.cameraPosition) - target)
+        target = viewport.view.cameraTarget
+        dist = norm(np.array(viewport.view.cameraPosition) - target)
 
-            viewport.view.setValues(
-                    #cameraTarget=origin,
-                    cameraPosition=target + dist*normal/norm(normal),
-                    cameraUpVector=np.cross(normal, axis2))
+        viewport.view.setValues(
+                #cameraTarget=origin,
+                cameraPosition=target + dist*normal/norm(normal),
+                cameraUpVector=np.cross(normal, axis2))
 
-            break   # stop searching for the active view cut
+        break   # stop searching for the active view cut
 
 def viewCutDatum(datum, cutName="DatumCut"):
     """Create a view cut from a datum plane"""
-    viewport = session.viewports[session.currentViewportName]
-    display = viewport.assemblyDisplay
+    viewport, display = getViewportDisplay()
     origin = np.asarray(datum.pointOn)
     normal = np.asarray(datum.normal)
     for v in (0,1,0), (0,0,1), (1,0,0):
@@ -236,8 +246,7 @@ def viewCutDatum(datum, cutName="DatumCut"):
 
 def viewCutPoint(point):
     """Adjust current viewCut to pass through given point"""
-    viewport = session.viewports[session.currentViewportName]
-    display = viewport.assemblyDisplay
+    viewport, display = getViewportDisplay()
     for viewCut in display.viewCuts.values():
         if not viewCut.active:
             continue

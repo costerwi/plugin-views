@@ -18,8 +18,8 @@ toolset.registerKernelMenuButton(
         moduleName='views',
         functionName='cutViewNormal()',
         author='Carl Osterwisch',
-        version='0.21',
-        applicableModules=['Visualization'],
+        version='0.3',
+        applicableModules=['Visualization', 'Assembly', 'Part'],
         description='Cut normal to the current view.')
 
 toolset.registerKernelMenuButton(
@@ -27,8 +27,8 @@ toolset.registerKernelMenuButton(
         moduleName='views',
         functionName='viewCutNormal()',
         author='Carl Osterwisch',
-        version='0.21',
-        applicableModules=['Visualization'],
+        version='0.3',
+        applicableModules=['Visualization', 'Assembly', 'Part'],
         description='Orient view normal to current ' +
                     'cutting plane.')
 
@@ -113,7 +113,7 @@ toolset.registerGuiMenuButton(
         kernelInitString='import views',
         author='Carl Osterwisch',
         version='0.1',
-        applicableModules=['Assembly'],
+        applicableModules=['Assembly', 'Part'],
         description='Create view cut from selected datum plane.'
         )
 
@@ -152,8 +152,8 @@ toolset.registerGuiMenuButton(
         object=viewCutPointProcedure(toolset),
         kernelInitString='import views',
         author='Carl Osterwisch',
-        version='0.1',
-        applicableModules=['Assembly'],
+        version='0.2',
+        applicableModules=['Assembly', 'Part'],
         description='Adjust cut position to pass through given point.'
         )
 
