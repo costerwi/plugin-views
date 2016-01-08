@@ -247,13 +247,17 @@ def viewCutDatum(datum, cutName="DatumCut"):
 def viewCutPoint(point):
     """Adjust current viewCut to pass through given point"""
     viewport, display = getViewportDisplay()
+    if hasattr(point, 'coordinates'):
+        xyz = point.coordinates
+    else:
+        xyz = viewport.displayedObject.getCoordinates(point)
     for viewCut in display.viewCuts.values():
         if not viewCut.active:
             continue
         if viewCut.shape != PLANE:
             continue # throw an error here?
         if viewCut.motion == TRANSLATE:
-            pos = np.dot(np.asarray(point.pointOn) - viewCut.origin,
+            pos = np.dot(np.asarray(xyz) - viewCut.origin,
                     viewCut.normal)
             viewCut.setValues(position=float(pos))
         # TODO ROTATE

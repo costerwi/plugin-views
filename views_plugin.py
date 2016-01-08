@@ -142,7 +142,7 @@ class viewCutPointProcedure(AFXProcedure):
                 owner=self,
                 keyword=self.pointKw,
                 prompt="Select point",
-                entitiesToPick=VERTICES, # TODO extend to other types
+                entitiesToPick=POINTS,
                 numberToPick=ONE,
                 sequenceStyle=ARRAY)    # TUPLE or ARRAY
 
@@ -153,7 +153,7 @@ toolset.registerGuiMenuButton(
         kernelInitString='import views',
         author='Carl Osterwisch',
         version='0.2',
-        applicableModules=['Assembly', 'Part'],
+        applicableModules=['Assembly', 'Part', 'Visualization'],
         description='Adjust cut position to pass through given point.'
         )
 
