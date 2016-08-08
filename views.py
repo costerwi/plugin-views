@@ -147,13 +147,13 @@ def synchVps(basevp=None):
         if othervp.odbDisplay.name != basevp.odbDisplay.name or \
            othervp.odbDisplay.fieldFrame != basevp.odbDisplay.fieldFrame:
             # Use the same field variables if the frames are different
-            #try:
-            othervp.odbDisplay.setPrimaryVariable(variableLabel=primVar[0],
+            try:
+                othervp.odbDisplay.setDeformedVariable(variableLabel=deformVar[0])
+                othervp.odbDisplay.setPrimaryVariable(variableLabel=primVar[0],
                     outputPosition=varPos,
                     refinement=(refType, primVar[5]))
-            othervp.odbDisplay.setDeformedVariable(variableLabel=deformVar[0])
-            #except VisError:
-            #    pass
+            except Exception as ex:
+                print(ex)
 
         if len(viewCutAttrs):
             if othervp.odbDisplay.viewCuts.has_key(viewCut.name):
