@@ -35,7 +35,7 @@ def rotateVector(point, vector, th):
                    [y*(u*u + w*w) - v*(u*x + w*z),  w*x - u*z],
                    [z*(u*u + v*v) - w*(u*x + v*y), -v*x + u*y] ])
     a = point*np.sum(point*vector) + \
-            np.dot(a, [cos(th), norm(vector)*sin(th)])
+            np.dot(a, [np.cos(th), norm(vector)*np.sin(th)])
     return a/np.sum(vector*vector)
 
 def getViewportDisplay(viewport=None):
@@ -199,10 +199,10 @@ def viewCutNormal(viewport=None):
         if viewCut.motion == ROTATE:
             # cut is rotated by some angle
             if viewCut.rotationAxis == AXIS_2:
-                normal = rotateVector(normal, axis2, viewCut.angle*pi/180)
+                normal = rotateVector(normal, axis2, viewCut.angle*np.pi/180)
             else:
                 axis3 = np.cross(normal, axis2)
-                normal = rotateVector(normal, axis3, viewCut.angle*pi/180)
+                normal = rotateVector(normal, axis3, viewCut.angle*np.pi/180)
                 axis2 = np.cross(axis3, normal)
 
         if viewCut.showModelAboveCut and not viewCut.showModelBelowCut:
