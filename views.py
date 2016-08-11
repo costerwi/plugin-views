@@ -87,7 +87,7 @@ def cutViewNormal(viewport=None, cutName="Viewnormal"):
             axis2=np.cross(-viewVector,
                 viewport.view.cameraUpVector))
     viewCut.setValues(motion=TRANSLATE, position=0)
-    display.setValues(activeCutName=cutName, viewCut=ON)
+    display.setValues(viewCutNames=(cutName,), viewCut=ON)
 
 def synchVps(basevp=None):
     """ Synchronize all other viewports to the given or current viewport """
