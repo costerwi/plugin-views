@@ -14,6 +14,15 @@ toolset.registerKernelMenuButton(
         description='Copy current viewport options to the others.')
 
 toolset.registerKernelMenuButton(
+        buttonText='&Views|S&wap viewport positions',
+        moduleName='views',
+        functionName='swapVps()',
+        author='Carl Osterwisch',
+        version='0.1',
+        applicableModules=['Visualization'],
+        description='Shift the positions of multiple viewports.')
+
+toolset.registerKernelMenuButton(
         buttonText='&Views|&Cut plane normal to view', 
         moduleName='views',
         functionName='cutViewNormal()',

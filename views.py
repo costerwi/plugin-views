@@ -166,6 +166,20 @@ def synchVps(basevp=None):
                 axis2=viewCut.axis2)
             othervc.setValues(**viewCutAttrs)
 
+def swapVps(basevp=None):
+    """ Swap the positions of multiple viewports """
+    viewports = [vp for vp in session.viewports.values()
+            if MINIMIZED != vp.windowState]
+    viewports.sort(key=lambda vp: vp.origin)    # sort by current position
+    state = [(vp.origin, vp.width, vp.height) for vp in viewports]
+    state.append(state.pop(0)) # shift the values
+    for vp, (origin, width, height) in zip(viewports, state):
+        vp.setValues(
+                origin=origin,
+                width=width,
+                height=height,
+                )
+
 def viewCutNormal(viewport=None):
     """Orient the view to be perpendicular to the active cutting plane."""
     viewport, display = getViewportDisplay(viewport)
