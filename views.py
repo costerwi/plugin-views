@@ -190,7 +190,7 @@ def viewCutNormal(viewport=None):
             continue # throw an error here?
         if hasattr(viewCut, 'csysName') and viewCut.csysName:
             # Find the csys which defines this cut
-            scratchOdb = session.scratchOdbs[odbDisplay.name]
+            scratchOdb = session.scratchOdbs[display.name]
             csys = scratchOdb.rootAssembly.datumCsyses[viewCut.csysName]
             if csys.type != CARTESIAN:
                 continue # throw an error here?
