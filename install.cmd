@@ -8,7 +8,7 @@ if defined HOME (
     set abaqus_plugins=%HOMEDRIVE%%HOMEPATH%\abaqus_plugins
 )
 
-echo This script installs the Abaqus plugin "%plugin%" in "%abaqus_plugins%"
+echo This script copies the Abaqus plugin "%plugin%" into "%abaqus_plugins%"
 
 if not exist "%abaqus_plugins%" (
     echo ERROR: "%abaqus_plugins%" does not exist.
@@ -16,9 +16,8 @@ if not exist "%abaqus_plugins%" (
     exit 1
 )
 
-set destination=%abaqus_plugins%\%plugin%
-
-if "%~dp0"=="%destination" (
+set destination=%abaqus_plugins%\%plugin%\
+if "%~dp0"=="%destination%" (
     echo ERROR: Cannot install from destination directory.
     pause
     exit 1
@@ -29,6 +28,6 @@ copy /Y *.* "%destination%"
 if ERRORLEVEL 0 (
     echo Success! Restart Abaqus CAE and check Plugin-ins menu.
 ) else (
-    echo Something went wrong. Contact osterwisch@caelynx.com
+    echo Something went wrong. Contact support@caelynx.com
 )
 pause
