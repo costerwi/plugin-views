@@ -8,7 +8,7 @@ if defined HOME (
     set abaqus_plugins=%HOMEDRIVE%%HOMEPATH%\abaqus_plugins
 )
 
-echo This script copies the Abaqus plugin "%plugin%" into "%abaqus_plugins%"
+echo This script copies the Abaqus CAE plugin "%plugin%" into "%abaqus_plugins%"
 
 if not exist "%abaqus_plugins%" (
     echo ERROR: "%abaqus_plugins%" does not exist.
