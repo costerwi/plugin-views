@@ -28,6 +28,6 @@ copy /Y "%~dp0\*.*" "%destination%"
 if ERRORLEVEL 0 (
     echo Success! Restart Abaqus CAE and check Plugin-ins menu.
 ) else (
-    echo Something went wrong. Contact support@caelynx.com
+    echo Something went wrong. Open an Issue at https://github.com/costerwi/plugin-views
 )
 pause

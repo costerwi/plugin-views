@@ -1,8 +1,6 @@
-"""Various kernel functions called from Abaqus/Viewer plugins to manipulate
-the point of view.
+"""Functions called from Abaqus/CAE plugins to manipulate the point of view.
 
 Carl Osterwisch, 2005 vim: set modeline foldmethod=indent fdn=1:
-$Id$
 """
 from abaqus import session
 from abaqusConstants import *

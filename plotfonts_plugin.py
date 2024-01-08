@@ -10,6 +10,6 @@ toolset.registerKernelMenuButton(
         functionName='setFonts()',
         author='Carl Osterwisch',
         version='0.1',
+        helpUrl=viewsCommon.helpUrl,
         applicableModules=['Visualization'],
         description='Increase font size in current session charts.')
-

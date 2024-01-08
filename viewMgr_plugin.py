@@ -1,7 +1,6 @@
 """Define the AFXForm class to handle views dialog box events.
 
-Carl Osterwisch <carl.osterwisch@avlna.com> June 2006
-$Id$
+Carl Osterwisch, June 2006
 """
 
 from abaqusGui import *

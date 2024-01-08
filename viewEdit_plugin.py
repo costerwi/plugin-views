@@ -1,6 +1,6 @@
 """Define a dialog box to allow manual editing of view direction.
 
-Carl Osterwisch <carl.osterwisch@avlna.com> July 2007
+Carl Osterwisch, July 2007
 """
 
 from abaqusGui import *
@@ -168,5 +168,6 @@ toolset.registerGuiMenuButton(
     author='Carl Osterwisch',
     version=str(0.3),
     applicableModules=abaqusConstants.ALL,
+    helpUrl=viewsCommon.helpUrl,
     description='Edit parameters for the current viewport view.',
     )

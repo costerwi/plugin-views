@@ -1,7 +1,6 @@
 """Define a dialog box to allow manual editing of viewport parameters.
 
 Carl Osterwisch <costerwi@gmail.com> November 2012
-$Id$
 """
 
 from abaqusGui import *
@@ -94,6 +93,7 @@ toolset.registerGuiMenuButton(
     object=viewportEditForm(toolset),
     author='Carl Osterwisch',
     version=str(__version__),
+    helpUrl=viewsCommon.helpUrl,
     applicableModules=abaqusConstants.ALL,
     description='Edit parameters for the current viewport.',
     )

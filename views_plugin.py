@@ -1,6 +1,7 @@
 """Register the Abaqus kernel methods from views.py"""
 
 from abaqusGui import *
+import viewsCommon
 
 toolset = getAFXApp().getAFXMainWindow().getPluginToolset()
 
@@ -10,6 +11,7 @@ toolset.registerKernelMenuButton(
         functionName='synchVps()',
         author='Carl Osterwisch',
         version='0.21',
+        helpUrl=viewsCommon.helpUrl,
         applicableModules=['Visualization'],
         description='Copy current viewport options to the others.')
 
@@ -19,6 +21,7 @@ toolset.registerKernelMenuButton(
         functionName='swapVps()',
         author='Carl Osterwisch',
         version='0.1',
+        helpUrl=viewsCommon.helpUrl,
         applicableModules=['Visualization'],
         description='Shift the positions of multiple viewports.')
 
@@ -29,6 +32,7 @@ toolset.registerKernelMenuButton(
         author='Carl Osterwisch',
         version='0.3',
         applicableModules=['Visualization', 'Assembly', 'Part'],
+        helpUrl=viewsCommon.helpUrl,
         description='Cut normal to the current view.')
 
 toolset.registerKernelMenuButton(
@@ -38,6 +42,7 @@ toolset.registerKernelMenuButton(
         author='Carl Osterwisch',
         version='0.3',
         applicableModules=['Visualization', 'Assembly', 'Part'],
+        helpUrl=viewsCommon.helpUrl,
         description='Orient view normal to current ' +
                     'cutting plane.')
 
@@ -48,6 +53,7 @@ toolset.registerKernelMenuButton(
         author='Carl Osterwisch',
         version='0.21',
         applicableModules=['Visualization', 'Assembly', 'Part'],
+        helpUrl=viewsCommon.helpUrl,
         description='Flip the view 180 degrees (look behind)')
 
 toolset.registerKernelMenuButton(
@@ -56,6 +62,7 @@ toolset.registerKernelMenuButton(
         functionName='viewSteps()',
         author='Carl Osterwisch',
         version='0.22',
+        helpUrl=viewsCommon.helpUrl,
         applicableModules=['Visualization'],
         description='Create a new viewport for each analysis step.')
 
@@ -65,6 +72,7 @@ toolset.registerKernelMenuButton(
         functionName='viewOdbs()',
         author='Carl Osterwisch',
         version='0.1',
+        helpUrl=viewsCommon.helpUrl,
         applicableModules=['Visualization'],
         description='Create a new viewport for each analysis step.')
 
@@ -75,6 +83,7 @@ toolset.registerKernelMenuButton(
         author='Carl Osterwisch',
         version='0.2',
         applicableModules=['Visualization'],
+        helpUrl=viewsCommon.helpUrl,
         description='Arrange visible viewports side-by-side.')
 
 toolset.registerKernelMenuButton(
@@ -83,6 +92,7 @@ toolset.registerKernelMenuButton(
         functionName='resetLayerTransform()',
         author='Carl Osterwisch',
         version='0.21',
+        helpUrl=viewsCommon.helpUrl,
         applicableModules=['Visualization'],
         description='Set layer transforms to 1')
 
@@ -123,6 +133,7 @@ toolset.registerGuiMenuButton(
         author='Carl Osterwisch',
         version='0.1',
         applicableModules=['Assembly', 'Part'],
+        helpUrl=viewsCommon.helpUrl,
         description='Create view cut from selected datum plane.'
         )
 
@@ -162,6 +173,7 @@ toolset.registerGuiMenuButton(
         kernelInitString='import views',
         author='Carl Osterwisch',
         version='0.2',
+        helpUrl=viewsCommon.helpUrl,
         applicableModules=['Assembly', 'Part', 'Visualization'],
         description='Adjust cut position to pass through given point.'
         )
