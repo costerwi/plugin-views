@@ -26,6 +26,15 @@ toolset.registerKernelMenuButton(
         description='Shift the positions of multiple viewports.')
 
 toolset.registerKernelMenuButton(
+        buttonText='&Views|&Snap',
+        moduleName='views',
+        functionName='viewSnap()',
+        author='Carl Osterwisch',
+        version=viewsCommon.__version__,
+        helpUrl=viewsCommon.helpUrl,
+        description='Snap view to closest saved view and closest up vector.')
+
+toolset.registerKernelMenuButton(
         buttonText='&Views|&Cut plane normal to view',
         moduleName='views',
         functionName='cutViewNormal()',

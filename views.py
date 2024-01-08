@@ -54,6 +54,35 @@ def modelPan(vector, viewport=None):
             cameraPosition=pos + vector,
             cameraTarget=target + vector)
 
+def viewSnap(viewport=None):
+    """Snap view to closest saved view and closest orthogonal up vector"""
+    if not viewport:
+        viewport = session.viewports[session.currentViewportName]
+    view = viewport.view
+    normal = np.asarray(view.cameraTarget) - view.cameraPosition
+
+    # find saved view with normal closest to current view
+    maxNormal = (-1000, )
+    for savedView in session.views.values():
+        savedNormal = np.asarray(savedView.cameraTarget) - savedView.cameraPosition
+        dp = np.dot(savedNormal/norm(savedNormal), normal)
+        maxNormal = max((dp, savedView, savedNormal), maxNormal)
+    dp, newView, newNormal = maxNormal
+    print('Snap to', newView.name, 'view')
+
+    # find orthogonal cameraUpVector closest to current view
+    upVector = np.asarray(newView.cameraUpVector)
+    maxUp = (-1000, )
+    for angle in 0, 90, 180, 270:
+        dp = np.dot(upVector, view.cameraUpVector)
+        maxUp = max((dp, angle, upVector), maxUp)
+        upVector = rotateVector(upVector, newNormal, np.pi/2)
+
+    view.setValues(
+        cameraPosition = view.cameraTarget - newNormal,
+        cameraUpVector = maxUp[2],
+        )
+
 def cutViewNormal(viewport=None, cutName="Viewnormal"):
     """Create a cut normal to the current view."""
     viewport, display = getViewportDisplay()
