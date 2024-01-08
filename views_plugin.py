@@ -6,11 +6,11 @@ import viewsCommon
 toolset = getAFXApp().getAFXMainWindow().getPluginToolset()
 
 toolset.registerKernelMenuButton(
-        buttonText='&Views|&Synchronize', 
+        buttonText='&Views|&Synchronize',
         moduleName='views',
         functionName='synchVps()',
         author='Carl Osterwisch',
-        version='0.21',
+        version=viewsCommon.__version__,
         helpUrl=viewsCommon.helpUrl,
         applicableModules=['Visualization'],
         description='Copy current viewport options to the others.')
@@ -20,81 +20,77 @@ toolset.registerKernelMenuButton(
         moduleName='views',
         functionName='swapVps()',
         author='Carl Osterwisch',
-        version='0.1',
+        version=viewsCommon.__version__,
         helpUrl=viewsCommon.helpUrl,
         applicableModules=['Visualization'],
         description='Shift the positions of multiple viewports.')
 
 toolset.registerKernelMenuButton(
-        buttonText='&Views|&Cut plane normal to view', 
+        buttonText='&Views|&Cut plane normal to view',
         moduleName='views',
         functionName='cutViewNormal()',
         author='Carl Osterwisch',
-        version='0.3',
-        applicableModules=['Visualization', 'Assembly', 'Part'],
+        version=viewsCommon.__version__,
         helpUrl=viewsCommon.helpUrl,
         description='Cut normal to the current view.')
 
 toolset.registerKernelMenuButton(
-        buttonText='&Views|&View normal to cut plane', 
+        buttonText='&Views|&View normal to cut plane',
         moduleName='views',
         functionName='viewCutNormal()',
         author='Carl Osterwisch',
-        version='0.3',
-        applicableModules=['Visualization', 'Assembly', 'Part'],
+        version=viewsCommon.__version__,
         helpUrl=viewsCommon.helpUrl,
         description='Orient view normal to current ' +
                     'cutting plane.')
 
 toolset.registerKernelMenuButton(
-        buttonText='&Views|View &behind', 
+        buttonText='&Views|View &behind',
         moduleName='views',
         functionName='behind()',
         author='Carl Osterwisch',
-        version='0.21',
-        applicableModules=['Visualization', 'Assembly', 'Part'],
+        version=viewsCommon.__version__,
         helpUrl=viewsCommon.helpUrl,
         description='Flip the view 180 degrees (look behind)')
 
 toolset.registerKernelMenuButton(
-        buttonText='&Views|View &steps', 
+        buttonText='&Views|View &steps',
         moduleName='views',
         functionName='viewSteps()',
         author='Carl Osterwisch',
-        version='0.22',
+        version=viewsCommon.__version__,
         helpUrl=viewsCommon.helpUrl,
         applicableModules=['Visualization'],
         description='Create a new viewport for each analysis step.')
 
 toolset.registerKernelMenuButton(
-        buttonText='&Views|View &odbs', 
+        buttonText='&Views|View &odbs',
         moduleName='views',
         functionName='viewOdbs()',
         author='Carl Osterwisch',
-        version='0.1',
+        version=viewsCommon.__version__,
         helpUrl=viewsCommon.helpUrl,
         applicableModules=['Visualization'],
         description='Create a new viewport for each analysis step.')
 
 toolset.registerKernelMenuButton(
-        buttonText='&Views|Tile &vertical', 
+        buttonText='&Views|Tile &vertical',
         moduleName='views',
         functionName='tileVertical()',
         author='Carl Osterwisch',
-        version='0.2',
-        applicableModules=['Visualization'],
+        version=viewsCommon.__version__,
         helpUrl=viewsCommon.helpUrl,
         description='Arrange visible viewports side-by-side.')
 
 toolset.registerKernelMenuButton(
-        buttonText='&Views|Reset &layer transforms', 
+        buttonText='&Views|Reset &layer transforms',
         moduleName='views',
         functionName='resetLayerTransform()',
         author='Carl Osterwisch',
-        version='0.21',
+        version=viewsCommon.__version__,
         helpUrl=viewsCommon.helpUrl,
         applicableModules=['Visualization'],
-        description='Set layer transforms to 1')
+        description='Reset layer transforms to 1 (identity)')
 
 
 class viewCutDatumProcedure(AFXProcedure):
@@ -131,8 +127,7 @@ toolset.registerGuiMenuButton(
         object=viewCutDatumProcedure(toolset),
         kernelInitString='import views',
         author='Carl Osterwisch',
-        version='0.1',
-        applicableModules=['Assembly', 'Part'],
+        version=viewsCommon.__version__,
         helpUrl=viewsCommon.helpUrl,
         description='Create view cut from selected datum plane.'
         )
@@ -172,7 +167,7 @@ toolset.registerGuiMenuButton(
         object=viewCutPointProcedure(toolset),
         kernelInitString='import views',
         author='Carl Osterwisch',
-        version='0.2',
+        version=viewsCommon.__version__,
         helpUrl=viewsCommon.helpUrl,
         applicableModules=['Assembly', 'Part', 'Visualization'],
         description='Adjust cut position to pass through given point.'

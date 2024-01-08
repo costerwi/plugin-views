@@ -2,25 +2,13 @@
 
 Carl Osterwisch, 2005 vim: set modeline foldmethod=indent fdn=1:
 """
+
+from __future__ import print_function
 from abaqus import session
 from abaqusConstants import *
 
-try:
-    import numpy as np
-except ImportError:
-    # Abaqus versions < 6.10-ef use the older Numeric module.
-    import Numeric as np
-
-    def cross(a, b):
-        " Vector cross product as in Matlab "
-        return np.array([ a[1]*b[2] - a[2]*b[1],
-                          a[2]*b[0] - a[0]*b[2],
-                          a[0]*b[1] - a[1]*b[0] ])
-    np.cross = cross
-
-def norm(v):
-    " Vector length as in Matlab "
-    return np.sqrt(np.sum(v*v, axis=-1))
+import numpy as np
+from numpy.linalg import norm  # vector length
 
 def rotateVector(point, vector, th):
     """Calculate rotation of "point" around arbitrary "vector" by radian angle "th".
@@ -70,7 +58,7 @@ def cutViewNormal(viewport=None, cutName="Viewnormal"):
     """Create a cut normal to the current view."""
     viewport, display = getViewportDisplay()
     viewVector = np.array(viewport.view.viewVector)
-    if display.viewCuts.has_key(cutName):
+    if cutName in display.viewCuts:
         viewCut = display.viewCuts[cutName]
         viewCut.setValues(
             normal=-viewVector,
@@ -154,7 +142,7 @@ def synchVps(basevp=None):
                 print(ex)
 
         if len(viewCutAttrs):
-            if othervp.odbDisplay.viewCuts.has_key(viewCut.name):
+            if viewCut.name in othervp.odbDisplay.viewCuts:
                 del(othervp.odbDisplay.viewCuts[viewCut.name])
             othervc = othervp.odbDisplay.ViewCut(
                 name=viewCut.name,
@@ -240,7 +228,7 @@ def viewCutDatum(datum, cutName="DatumCut"):
     for v in (0,1,0), (0,0,1), (1,0,0):
         if abs(np.dot(v, normal)) < 0.5: # Dissimilar directions
             break
-    if display.viewCuts.has_key(cutName):
+    if cutName in display.viewCuts:
         viewCut = display.viewCuts[cutName]
         viewCut.setValues(
             origin = origin,
@@ -284,11 +272,10 @@ def viewSteps():
             if len(step.frames) > 0]
     viewid = 1
     while len(session.viewports) < len(steps):
-        while session.viewports.has_key('Viewport: %d'%viewid):
+        while 'Viewport: %d'%viewid in session.viewports:
             viewid += 1
         session.Viewport(name='Viewport: %d'%viewid)
-    sortednames = session.viewports.keys()
-    sortednames.sort()
+    sortednames = [sorted(session.viewports.keys())]
     for (step, vpname) in zip(steps, sortednames):
         viewport=session.viewports[vpname]
         viewport.setValues(displayedObject=currentOdb)
@@ -298,11 +285,11 @@ def viewOdbs():
     """ Create and assign a separate viewport for each open odb. """
     viewid = 1
     while len(session.viewports) < len(session.odbs):
-        while session.viewports.has_key('Viewport: %d'%viewid):
+        while 'Viewport: %d'%viewid in session.viewports:
             viewid += 1
         session.Viewport(name='Viewport: %d'%viewid)
     for (odb, viewport) in zip(
-            session.odbs.values(), session.viewports.values()):
+            list(session.odbs.values()), list(session.viewports.values())):
         viewport.setValues(displayedObject=odb)
 
 def tileVertical():

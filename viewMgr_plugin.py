@@ -18,6 +18,8 @@ class myQuery:
     def __del__(self):
         "unregister the query when this object is deleted"
         self.object.unregisterQuery(self.subroutine)
+    def __repr__(self):
+        return 'myQuery {}'.format(self.subroutine.__doc__)
 
 
 class myAFXTable(AFXTable):
@@ -269,5 +271,6 @@ toolset.registerGuiMenuButton(
         kernelInitString='import viewSave; viewSave.init()',
         author='Carl Osterwisch',
         version=str(viewsCommon.__version__),
+        helpUrl=viewsCommon.helpUrl,
         applicableModules=['Visualization'],
         description='Store and retrieve custom viewport views.')

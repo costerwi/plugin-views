@@ -1,5 +1,6 @@
 # $Id$ vim: set modeline foldmethod=marker:
 
+from __future__ import print_function
 import viewsCommon
 import abaqus
 from abaqusConstants import *
@@ -15,8 +16,6 @@ except ImportError:
 xmldoc = None
 xmlFileName = None
 debug = os.environ.get('DEBUG')
-if debug:
-    print "viewSave Debug mode is on"
 
 # {{{1 Utility functions ######################################################
 
@@ -185,8 +184,9 @@ knownObjects = {    # {{{2 What to save from each element type
     'ViewCut': [ saveViewCut ],
     'float' : [],
     'int': [],
-    "'symbolicConstants.AbaqusBoolean": [],
-    "'symbolicConstants.SymbolicConstant": [],
+    'bool': [],
+    'symbolicConstants.AbaqusBoolean': [],
+    'symbolicConstants.SymbolicConstant': [],
     }
 
 skipMembers = ['autoDeformationScaleValue', 'autoMaxValue', 'autoMinValue', 'name']
@@ -194,15 +194,18 @@ skipMembers = ['autoDeformationScaleValue', 'autoMaxValue', 'autoMinValue', 'nam
 
 def saveXml(xmlElement, abaqusObject):  # {{{2
     "Recursively read abaqus data and store in xml dom."
+
+    import re
     if hasattr(abaqusObject, 'name'):
         xmlElement.setAttribute('name', abaqusObject.name)
 
     # Must convert type to string since Abaqus does not define all types
-    typeName = str(type(abaqusObject))[7:-2]
-    if knownObjects.has_key(typeName):
+    m = re.search("'(.+)'", str(type(abaqusObject)))
+    typeName = m.group(1)
+    if typeName in knownObjects:
         members = knownObjects[typeName]
         if debug:
-            print "knownObject %r has members %r"%(typeName, members)
+            print("knownObject %r has members %r"%(typeName, members))
     else:
         # Try to figure out which members to save for this object type
         members = knownObjects.setdefault(typeName, [])
@@ -212,13 +215,13 @@ def saveXml(xmlElement, abaqusObject):  # {{{2
                     and not callable(getattr(abaqusObject, a)):
                 members.append(a)
         if debug:
-            print "unknownObject %r has members %r"%(typeName, members)
+            print("unknownObject %r has members %r"%(typeName, members))
 
     if len(members):
         # Complex type with data members
         for attr in members:
             if debug:
-                print "saving member %r"%attr
+                print("saving member %r"%attr)
             if callable(attr):
                 attr(xmlElement, abaqusObject)
             elif hasattr(abaqusObject, attr):
@@ -263,11 +266,11 @@ def restoreXml(xmlElement, abaqusObject):
                         arguments[str(xmlChild.tagName)] = \
                                 eval(restoreXml(xmlChild, None))
         if debug:
-            print xmlElement.tagName, "( %r )"%arguments
+            print(xmlElement.tagName, "( %r )"%arguments)
         try:
             abaqusObject = abaqusObject(**arguments)
         except: # TODO better error checking!
-            if arguments.has_key('name'):
+            if 'name' in arguments:
                 abaqusObject = abaqusObject(name=arguments['name'])
 
     setValues = {}
@@ -284,11 +287,11 @@ def restoreXml(xmlElement, abaqusObject):
 
     if len(setValues) and hasattr(abaqusObject, 'setValues'):
         if debug:
-            print xmlElement.tagName, ".setValues %r"%setValues
+            print(xmlElement.tagName, ".setValues %r"%setValues)
         try:
             abaqusObject.setValues(**setValues)
         except TypeError:
-            print xmlElement.tagName, sys.exc_info()[1]
+            print(xmlElement.tagName, sys.exc_info()[1])
 
     return text.strip()
 
@@ -381,20 +384,20 @@ def setView(viewId):    # {{{2 Restore the specified xml userview Id
     """
     xmlView = xmldoc.getElementById(viewId)
     if not xmlView:
-        print "View %r not in userViews database."%viewId
+        print("View %r not in userViews database."%viewId)
     else:
         datestr = xmlView.getAttribute('dateTime')
         if datestr:
             dateTime = iso8601.parse(datestr)
             localtime = iso8601.time.localtime(dateTime)
             datestr = iso8601.time.strftime('%Y-%m-%d %H:%M', localtime)
-        print xmlView.getAttribute('name'), datestr
+        print(xmlView.getAttribute('name'), datestr)
         vps = xmlView.getElementsByTagName('Viewport')
-        vpObject = abaqus.session.viewports.values()[0]  # current viewport
+        vpObject = list(abaqus.session.viewports.values())[0]  # current viewport
         if len(vps) > 1:
             for vpElement in vps:
                 vpname = str(vpElement.getAttribute('name'))
-                if abaqus.session.viewports.has_key(vpname):
+                if vpname in abaqus.session.viewports:
                     vpObject = abaqus.session.viewports[vpname]
                 else:
                     # Create viewports as necessary for the userView
@@ -407,7 +410,7 @@ def setView(viewId):    # {{{2 Restore the specified xml userview Id
             # restoreXml settings to the current viewport
             restoreXml(vpElement, vpObject)
         else:
-            print "No viewports defined."
+            print("No viewports defined.")
 
 def setAnnotation(viewId):    # {{{2 Restore annotations from the specified xml userview Id
     """Retrieve the xmlElement for the identified userView.
@@ -416,17 +419,17 @@ def setAnnotation(viewId):    # {{{2 Restore annotations from the specified xml 
     """
     xmlView = xmldoc.getElementById(viewId)
     if not xmlView:
-        print "View %r not in userViews database."%viewId
+        print("View %r not in userViews database."%viewId)
         return
     datestr = xmlView.getAttribute('dateTime')
     if datestr:
         dateTime = iso8601.parse(datestr)
         localtime = iso8601.time.localtime(dateTime)
         datestr = iso8601.time.strftime('%Y-%m-%d %H:%M', localtime)
-    print xmlView.getAttribute('name'), datestr
+    print(xmlView.getAttribute('name'), datestr)
     xmlUserData = xmlView.getElementsByTagName('userData')
     if not xmlUserData:
-        print "View does not contain annotations."
+        print("View does not contain annotations.")
         return
 
     vpObject = abaqus.session.viewports.values()[0]  # current viewport
@@ -444,7 +447,7 @@ def deleteViews(viewIds):   # {{{2 Delete a userview from the database
             xmlView.unlink()
             xmldoc.changed = 1
         else:
-            print "View %r not in userViews database."%viewId
+            print("View %r not in userViews database."%viewId)
     for view in reversed(abaqus.session.customData.userViews):
         if view[0] in viewIds:
             abaqus.session.customData.userViews.remove(view)
@@ -463,7 +466,7 @@ def renameView(viewId, name):   # {{{2 Rename a userview
                 views[rownum] = tuple(copy)
         xmldoc.changed = 1
     else:
-        print "View %r not in userViews database."%viewId
+        print("View %r not in userViews database."%viewId)
 
 
 def init(): # {{{2
@@ -478,7 +481,7 @@ def init(): # {{{2
         abaqus.session.customData.userViews = customKernel.RegisteredList()
     readXmlFile(viewsCommon.xmlFileName)
 
-    print __name__, 'addCallback printToFile'
+    print(__name__, 'addCallback printToFile')
     methodCallback.addCallback(type(abaqus.session), 'printToFile', 
             printToFileCallback)
 

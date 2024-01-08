@@ -1,5 +1,6 @@
 #!/bin/env python
 
+from __future__ import print_function
 import time
 import datetime
 
@@ -88,18 +89,18 @@ if __name__ == '__main__':
     example = "2011-03-23T17:33:30.50Z"
 
     secs = parse(example)
-    print "example =       ", example
-    print "secs = parse(example) =", secs
-    print "tostring(secs) =", tostring(secs)
+    print("example =       ", example)
+    print("secs = parse(example) =", secs)
+    print("tostring(secs) =", tostring(secs))
     parsed = datetime.datetime.fromtimestamp(secs, UTC)
-    print "parsed = fromtimestamp(secs, UTC)    =", parsed
-    print "parsed.isoformat()                   =", parsed.isoformat()
-    print "parsed.astimezone(local).isoformat() =", parsed.astimezone(local).isoformat()
+    print("parsed = fromtimestamp(secs, UTC)    =", parsed)
+    print("parsed.isoformat()                   =", parsed.isoformat())
+    print("parsed.astimezone(local).isoformat() =", parsed.astimezone(local).isoformat())
 
     # Get current local time and assign local time zone to it
-    print "Testing datetime module"
+    print("Testing datetime module")
     now = datetime.datetime.now().replace(tzinfo=local)
-    print "local.utcoffset(now) =", local.utcoffset(now)
-    print "now.isoformat()      =", now.isoformat()
-    print "now.strftime(isofmt) =", now.strftime(isofmt)
-    print "now.astimezone(UTC).strftime(isofmt) =", now.astimezone(UTC).strftime(isofmt)
+    print("local.utcoffset(now) =", local.utcoffset(now))
+    print("now.isoformat()      =", now.isoformat())
+    print("now.strftime(isofmt) =", now.strftime(isofmt))
+    print("now.astimezone(UTC).strftime(isofmt) =", now.astimezone(UTC).strftime(isofmt))

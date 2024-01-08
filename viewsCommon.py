@@ -2,7 +2,6 @@
 
 """
 
-__version__ = 0.54
+__version__ = '1.0.0'
 helpUrl='https://github.com/costerwi/plugin-views'
 xmlFileName = 'userViews.xml'
-

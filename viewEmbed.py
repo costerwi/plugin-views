@@ -2,8 +2,8 @@
 """Embed userView data into png file.
 
 Usage: viewEmbed.py userViews.xml
-$Id$
 """
+from __future__ import print_function
 import sys, os
 
 if len(sys.argv) != 2:
@@ -31,7 +31,7 @@ for view in xmldoc.getElementsByTagName("userView"):
                     str(view.toxml())))
             # copy chunk to outfile
             outfile.write(pngFile.encodeChunk(chunk))
-        print fname
+        print(fname)
         outfile.close()
         os.utime(outfile.name, (stat.st_atime, stat.st_mtime))
         os.remove(fname)
