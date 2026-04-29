@@ -3,6 +3,7 @@
 from __future__ import print_function
 import viewsCommon
 import abaqus
+from abaqus import session
 from abaqusConstants import *
 import customKernel # for registered list of userViews
 import os
@@ -281,7 +282,10 @@ def restoreXml(xmlElement, abaqusObject):
                 abaqusChild = getattr(abaqusObject, xmlChild.tagName, None)
                 value = restoreXml(xmlChild, abaqusChild)
                 if len(value):
-                    setValues[str(xmlChild.tagName)] = eval(value)
+                    try:
+                        setValues[str(xmlChild.tagName)] = eval(value)
+                    except AttributeError as e:
+                        print(e, repr(value))
         elif xmlChild.TEXT_NODE == xmlChild.nodeType:
             text += xmlChild.data
 
