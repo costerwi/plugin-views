@@ -26,7 +26,7 @@ toolset.registerKernelMenuButton(
         description='Shift the positions of multiple viewports.')
 
 toolset.registerKernelMenuButton(
-        buttonText='&Views|&Snap',
+        buttonText='&Views|&Snap to saved view',
         moduleName='views',
         functionName='viewSnap()',
         author='Carl Osterwisch',
@@ -138,6 +138,7 @@ toolset.registerGuiMenuButton(
         author='Carl Osterwisch',
         version=viewsCommon.__version__,
         helpUrl=viewsCommon.helpUrl,
+        applicableModules=['Assembly', 'Load', 'Mesh', 'Part', 'Property'],
         description='Create view cut from selected datum plane.'
         )
 

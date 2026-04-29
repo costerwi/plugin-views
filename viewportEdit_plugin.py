@@ -5,8 +5,7 @@ Carl Osterwisch <costerwi@gmail.com> November 2012
 
 from abaqusGui import *
 import abaqusConstants
-
-__version__ = 0.1
+from viewsCommon
 
 ###########################################################################
 # Dialog Box
@@ -92,7 +91,7 @@ toolset.registerGuiMenuButton(
     buttonText='&Views|Edit Viewport...', 
     object=viewportEditForm(toolset),
     author='Carl Osterwisch',
-    version=str(__version__),
+    version=viewsCommon.__version__,
     helpUrl=viewsCommon.helpUrl,
     applicableModules=abaqusConstants.ALL,
     description='Edit parameters for the current viewport.',
