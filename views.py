@@ -102,7 +102,10 @@ def cutViewNormal(viewport=None, cutName="Viewnormal"):
             axis2=np.cross(-viewVector,
                 viewport.view.cameraUpVector))
     viewCut.setValues(motion=TRANSLATE, position=0)
-    display.setValues(viewCutNames=(cutName,), viewCut=ON)
+    if hasattr(display, 'viewCutNames'):
+        display.setValues(viewCutNames=(cutName,), viewCut=ON)
+    else:
+        display.setValues(activeCutName=cutName, viewCut=ON)
 
 def synchVps(basevp=None):
     """ Synchronize all other viewports to the given or current viewport """
@@ -151,6 +154,8 @@ def synchVps(basevp=None):
             optOther = getattr(othervp, opt)
             optOther.setValues(getattr(basevp, opt))
         for opt in [option for option in dir(basevp.odbDisplay) if option.endswith('Options')]:
+            if opt.startswith('_'):
+                continue
             optOther = getattr(othervp.odbDisplay, opt)
             try:
                 optOther.setValues(getattr(basevp.odbDisplay, opt))
@@ -301,25 +306,30 @@ def viewSteps():
             if len(step.frames) > 0]
     viewid = 1
     while len(session.viewports) < len(steps):
+        # Create enough Viewports to hold all steps
         while 'Viewport: %d'%viewid in session.viewports:
+            # Find a unique Viewport name
             viewid += 1
         session.Viewport(name='Viewport: %d'%viewid)
-    sortednames = [sorted(session.viewports.keys())]
-    for (step, vpname) in zip(steps, sortednames):
+    for (step, vpname) in zip(steps, session.viewports.keys()):
         viewport=session.viewports[vpname]
         viewport.setValues(displayedObject=currentOdb)
         viewport.odbDisplay.setFrame(step.frames[-1])
+        print(viewport.name, step.name, step.description, sep='\t')
 
 def viewOdbs():
     """ Create and assign a separate viewport for each open odb. """
     viewid = 1
     while len(session.viewports) < len(session.odbs):
+        # Create enough Viewports to hold all odbs
         while 'Viewport: %d'%viewid in session.viewports:
+            # Find a unique Viewport name
             viewid += 1
         session.Viewport(name='Viewport: %d'%viewid)
     for (odb, viewport) in zip(
             list(session.odbs.values()), list(session.viewports.values())):
         viewport.setValues(displayedObject=odb)
+        print(viewport.name, odb.name, sep='\t')
 
 def tileVertical():
     """ Arrange visible viewports side-by-side """
