@@ -265,12 +265,13 @@ class viewManagerForm(AFXForm):
 ###########################################################################
 toolset = getAFXApp().getAFXMainWindow().getPluginToolset()
 
-toolset.registerGuiMenuButton(
-        buttonText='&Views|&Manager...', 
-        object=viewManagerForm(toolset),
-        kernelInitString='import viewSave; viewSave.init()',
-        author='Carl Osterwisch',
-        version=str(viewsCommon.__version__),
-        helpUrl=viewsCommon.helpUrl,
-        applicableModules=['Visualization'],
-        description='Store and retrieve custom viewport views.')
+# Plugin requires update, skip it for now
+#toolset.registerGuiMenuButton(
+#        buttonText='&Views|&Manager...',
+#        object=viewManagerForm(toolset),
+#        kernelInitString='import viewSave; viewSave.init()',
+#        author='Carl Osterwisch',
+#        version=str(viewsCommon.__version__),
+#        helpUrl=viewsCommon.helpUrl,
+#        applicableModules=['Visualization'],
+#        description='Store and retrieve custom viewport views.')
