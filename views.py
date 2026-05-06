@@ -326,17 +326,15 @@ def viewCutPlanar(planar, cutName="PlanarCut"):
     display.setValues(activeCutName=cutName, viewCut=ON)
 
 def viewCutPoint(point):
-    """Adjust current viewCut to pass through given point"""
+    """Adjust viewCuts to pass through given point"""
     viewport, display = getViewportDisplay()
     if hasattr(point, 'coordinates'):
         xyz = point.coordinates
     else:
         xyz = viewport.displayedObject.getCoordinates(point)
-    if not display.viewCut:
-        display.setValues(viewCut=ON)
+    viewDirection = np.asarray(viewport.view.cameraTarget) - viewport.view.cameraPosition
+    bestCut = (-1,)
     for viewCut in display.viewCuts.values():
-        if not viewCut.active:
-            continue
         if viewCut.shape != PLANE:
             print(viewCut.name, "unsupported shape", viewCut.shape)
             continue
@@ -347,6 +345,15 @@ def viewCutPoint(point):
         else:
             # TODO ROTATE
             print(viewCut.name, "unsupported motion", viewCut.motion)
+        dot = np.dot(viewCut.normal, viewDirection)
+        bestCut = max( bestCut, (abs(dot), viewCut) )
+        if dot <= 0:
+            viewCut.setValues(showModelBelowCut=True, showModelAboveCut=False)
+        else:
+            viewCut.setValues(showModelBelowCut=False, showModelAboveCut=True)
+    if not display.viewCut:
+        # Activate the best aligned cut
+        display.setValues(viewCutNames=(bestCut[1].name,), viewCut=ON)
 
 def viewSteps():
     """ Create and assign a separate viewport for each analysis step. """
