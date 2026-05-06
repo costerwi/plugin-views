@@ -36,6 +36,50 @@ def getViewportDisplay(viewport=None):
         display = viewport.partDisplay
     return viewport, display
 
+# {{{1 VIEWS
+
+def alignToDatum(datum):
+    print(datum)
+    print(dir(datum))
+    if hasattr(datum, "normal"):
+        alignToPlanar(datum)
+
+def planarFeatures(planar):
+    """Extract target and normal from any planar feature"""
+    if hasattr(planar, 'getCentroid'):
+        target = np.squeeze(planar.getCentroid())
+    elif hasattr(planar, 'pointOn'):
+        target = np.asarray(planar.pointOn)
+    else:
+        raise TypeError('Unsupported planar normal', repr(planar))
+    if hasattr(planar, 'getNormal'):
+        normal = np.asarray(planar.getNormal())
+    elif hasattr(planar, 'normal'):
+        normal = np.asarray(planar.normal)
+    else:
+        raise TypeError('Unsupported planar normal', repr(planar))
+    return target, normal
+
+def alignToPlanar(planar):
+    """Change view to face a planar feature"""
+    try:
+        target, normal = planarFeatures(planar)
+    except TypeError as E:
+            print(E)
+            return
+    viewport = session.viewports[session.currentViewportName]
+    viewport.view.setValues(
+            cameraTarget=target,
+            cameraPosition=target + normal,
+            )
+
+def alignToUp(line):
+    """Pick a line to align the vertical orientation"""
+    viewport = session.viewports[session.currentViewportName]
+    print('line', line)
+    print(repr(line))
+    print(dir(line))
+
 def behind(viewport=None):
     """Flip the view 180 degrees (look behind)"""
     if not viewport:
@@ -254,11 +298,14 @@ def viewCutNormal(viewport=None):
 
         break   # stop searching for the active view cut
 
-def viewCutDatum(datum, cutName="DatumCut"):
-    """Create a view cut from a datum plane"""
+def viewCutPlanar(planar, cutName="PlanarCut"):
+    """Create a view cut from a planar feature"""
     viewport, display = getViewportDisplay()
-    origin = np.asarray(datum.pointOn)
-    normal = np.asarray(datum.normal)
+    try:
+        origin, normal = planarFeatures(planar)
+    except TypeError as E:
+            print(E)
+            return
     for v in (0,1,0), (0,0,1), (1,0,0):
         if abs(np.dot(v, normal)) < 0.5: # Dissimilar directions
             break
@@ -285,16 +332,21 @@ def viewCutPoint(point):
         xyz = point.coordinates
     else:
         xyz = viewport.displayedObject.getCoordinates(point)
+    if not display.viewCut:
+        display.setValues(viewCut=ON)
     for viewCut in display.viewCuts.values():
         if not viewCut.active:
             continue
         if viewCut.shape != PLANE:
-            continue # throw an error here?
+            print(viewCut.name, "unsupported shape", viewCut.shape)
+            continue
         if viewCut.motion == TRANSLATE:
             pos = np.dot(np.asarray(xyz) - viewCut.origin,
                     viewCut.normal)
             viewCut.setValues(position=float(pos))
-        # TODO ROTATE
+        else:
+            # TODO ROTATE
+            print(viewCut.name, "unsupported motion", viewCut.motion)
 
 def viewSteps():
     """ Create and assign a separate viewport for each analysis step. """

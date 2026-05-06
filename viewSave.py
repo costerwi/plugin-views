@@ -130,8 +130,8 @@ def savePlotStateOptions(xmlElement, odbDisplay):   # {{{2
             CONTOURS_ON_DEF in plotState:
         primVar = odbDisplay.primaryVariable
         if len(primVar[0]):
-            varPos = [ UNDEFINED_POSITION, NODAL, INTEGRATION_POINT, ELEMENT_FACE, 
-                ELEMENT_NODAL, WHOLE_ELEMENT, ELEMENT_CENTROID, WHOLE_REGION, 
+            varPos = [ UNDEFINED_POSITION, NODAL, INTEGRATION_POINT, ELEMENT_FACE,
+                ELEMENT_NODAL, WHOLE_ELEMENT, ELEMENT_CENTROID, WHOLE_REGION,
                 WHOLE_PART_INSTANCE, WHOLE_MODEL, GENERAL_PARTICLE ][primVar[1]]
             cmdElement = addLeaf(xmlElement, 'setPrimaryVariable')
             addLeaf(cmdElement, 'variableLabel', primVar[0], {'type': 'argument'})
@@ -148,7 +148,6 @@ def savePlotStateOptions(xmlElement, odbDisplay):   # {{{2
         saveXml(addLeaf(xmlElement, 'symbolOptions'), odbDisplay.symbolOptions)
     if len(plotState) > 1:
         saveXml(addLeaf(xmlElement, 'superimposeOptions'), odbDisplay.superimposeOptions)
-            
 
 def saveAnnotations(xmlElement, userData):  # {{{2
     "Store current annotations"
@@ -170,12 +169,31 @@ def saveWindowState(xmlElement, viewport):  # {{{2
         addLeaf(xmlElement, 'restore')
 
 
+def saveColorMode(xmlElement, viewport):  # {{{2
+    "Store the viewport colorMode"
+    if DEFAULT_COLORS == viewport.colorMode:
+        addLeaf(xmlElement, 'disableMultipleColors')
+        return
+    for name, cmap in viewport.colorMappings.items():
+        if str(viewport.colorMode).startswith(str(cmap.type)):
+            break
+    else:
+        if debug:
+            print('unknown colorMode', viewport.colorMode)
+        return
+    # TODO
+    #addLeaf(xmlElement, 'enableMultipleColors')
+    if debug:
+        print('colorMode', name)
+
+
 knownObjects = {    # {{{2 What to save from each element type
     'Odb' : [ 'userData' ],
     'UserData': [ saveAnnotations ],
     'Text' : [ 'box', 'justification', 'referencePoint', 'color', 'text', 'backgroundStyle',
         'rotationAngle', 'backgroundColor', 'offset', 'font', 'anchor' ],
-    'Viewport': [saveWindowState, 'origin', 'width', 'height', 
+    'Viewport': [saveWindowState, saveColorMode,
+        'origin', 'width', 'height',
         'viewportAnnotationOptions', 'view', 'odbDisplay'],
     'View': ['projection',
         'cameraTarget', 'cameraPosition', 'cameraUpVector',
@@ -190,8 +208,13 @@ knownObjects = {    # {{{2 What to save from each element type
     'symbolicConstants.SymbolicConstant': [],
     }
 
-skipMembers = ['autoDeformationScaleValue', 'autoMaxValue', 'autoMinValue', 'name']
- 
+skipMembers = {
+        'autoDeformationScaleValue',
+        'autoMaxValue',
+        'autoMinValue',
+        'name',
+        'fieldOfViewAngle',
+        }
 
 def saveXml(xmlElement, abaqusObject):  # {{{2
     "Recursively read abaqus data and store in xml dom."
@@ -201,7 +224,7 @@ def saveXml(xmlElement, abaqusObject):  # {{{2
         xmlElement.setAttribute('name', abaqusObject.name)
 
     # Must convert type to string since Abaqus does not define all types
-    m = re.search("'(.+)'", str(type(abaqusObject)))
+    m = re.search(r"'(?:abaqus\.)?(.+)'", str(type(abaqusObject)))
     typeName = m.group(1)
     if typeName in knownObjects:
         members = knownObjects[typeName]
@@ -289,13 +312,26 @@ def restoreXml(xmlElement, abaqusObject):
         elif xmlChild.TEXT_NODE == xmlChild.nodeType:
             text += xmlChild.data
 
-    if len(setValues) and hasattr(abaqusObject, 'setValues'):
-        if debug:
-            print(xmlElement.tagName, ".setValues %r"%setValues)
-        try:
-            abaqusObject.setValues(**setValues)
-        except TypeError:
-            print(xmlElement.tagName, sys.exc_info()[1])
+    if hasattr(abaqusObject, 'setValues'):
+        removed = {}
+        while len(setValues):
+            if debug:
+                print(xmlElement.tagName, ".setValues %r"%setValues)
+            try:
+                abaqusObject.setValues(**setValues)
+                if debug and removed:
+                    print('removed invalid keywords', removed)
+                break  # success!
+            except TypeError:
+                msg = str(sys.exc_info()[1])
+                last = msg.split()[-1]
+                if 'keyword error on' in msg and last in setValues:
+                    # remove this setting and try again
+                    removed[last] = setValues[last]
+                    del setValues[last]
+                else:
+                    print(repr(abaqusObject), xmlElement.tagName, msg)
+                    break # failed for other reason
 
     return text.strip()
 
@@ -456,7 +492,6 @@ def deleteViews(viewIds):   # {{{2 Delete a userview from the database
         if view[0] in viewIds:
             abaqus.session.customData.userViews.remove(view)
 
-   
 def renameView(viewId, name):   # {{{2 Rename a userview
     "Modify the view name in the database."
     xmlView = xmldoc.getElementById(viewId)
@@ -483,9 +518,9 @@ def init(): # {{{2
     # Add to session.customData
     if not hasattr(abaqus.session.customData, "userViews"):
         abaqus.session.customData.userViews = customKernel.RegisteredList()
+        print(__name__, 'addCallback printToFile')
+        methodCallback.addCallback(type(abaqus.session), 'printToFile',
+                printToFileCallback)
     readXmlFile(viewsCommon.xmlFileName)
 
-    print(__name__, 'addCallback printToFile')
-    methodCallback.addCallback(type(abaqus.session), 'printToFile', 
-            printToFileCallback)
 

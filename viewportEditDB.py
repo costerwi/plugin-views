@@ -4,8 +4,6 @@ Carl Osterwisch <costerwi@gmail.com> November 2012
 """
 
 from abaqusGui import *
-import abaqusConstants
-from viewsCommon
 
 ###########################################################################
 # Dialog Box
@@ -82,17 +80,3 @@ class viewportEditForm(AFXForm):
     def getFirstDialog(self):
         return viewportEditDB(self)
 
-###########################################################################
-# Register the plugin
-###########################################################################
-toolset = getAFXApp().getAFXMainWindow().getPluginToolset()
-
-toolset.registerGuiMenuButton(
-    buttonText='&Views|Edit Viewport...', 
-    object=viewportEditForm(toolset),
-    author='Carl Osterwisch',
-    version=viewsCommon.__version__,
-    helpUrl=viewsCommon.helpUrl,
-    applicableModules=abaqusConstants.ALL,
-    description='Edit parameters for the current viewport.',
-    )

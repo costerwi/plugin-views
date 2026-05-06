@@ -3,10 +3,8 @@
 Carl Osterwisch, June 2006
 """
 
-from abaqusGui import *
-import abaqusConstants
-import viewsCommon
 import re
+from abaqusGui import *
 
 class myQuery:
     "Object used to register/unregister Queries"
@@ -259,19 +257,3 @@ class viewManagerForm(AFXForm):
             sendCommand("viewSave.readXmlFile(fileName=%r)"%self.fntarget.getValue())
         return 0
 
-
-###########################################################################
-# Register abaqus plugin
-###########################################################################
-toolset = getAFXApp().getAFXMainWindow().getPluginToolset()
-
-# Plugin requires update, skip it for now
-#toolset.registerGuiMenuButton(
-#        buttonText='&Views|&Manager...',
-#        object=viewManagerForm(toolset),
-#        kernelInitString='import viewSave; viewSave.init()',
-#        author='Carl Osterwisch',
-#        version=str(viewsCommon.__version__),
-#        helpUrl=viewsCommon.helpUrl,
-#        applicableModules=['Visualization'],
-#        description='Store and retrieve custom viewport views.')

@@ -4,8 +4,6 @@ Carl Osterwisch, July 2007
 """
 
 from abaqusGui import *
-import abaqusConstants
-import viewsCommon
 
 ###########################################################################
 # Dialog Box
@@ -158,17 +156,3 @@ class viewEditForm(AFXForm):
     def getFirstDialog(self):
         return viewEditDB(self)
 
-###########################################################################
-# Register the plugin
-###########################################################################
-toolset = getAFXApp().getAFXMainWindow().getPluginToolset()
-
-toolset.registerGuiMenuButton(
-    buttonText='&Views|&Edit...', 
-    object=viewEditForm(toolset),
-    author='Carl Osterwisch',
-    version=viewsCommon.__version__,
-    applicableModules=abaqusConstants.ALL,
-    helpUrl=viewsCommon.helpUrl,
-    description='Edit parameters for the current viewport view.',
-    )

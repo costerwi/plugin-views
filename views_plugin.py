@@ -1,32 +1,143 @@
 """Register the Abaqus kernel methods from views.py"""
 
 from abaqusGui import *
+from viewEditDB import viewEditForm
+from viewportEditDB import viewportEditForm
+from viewManagerDB import viewManagerForm
 import viewsCommon
+
+# {{{1 Procedure definition
+class PickSomethingProcedure(AFXProcedure):
+    """Base class to allow user to select things and run a views command"""
+
+    entitiesToPick = PLANES # may be redefined by child class
+    prompt = 'objects to operate upon' # must be redefined by child class
+    method = 'thing_to_do' # must be redefined by child class
+
+    def __init__(self, owner):
+        AFXProcedure.__init__(self, owner) # Construct the base class.
+
+        self.command = AFXGuiCommand(mode=self,
+                method=self.method,
+                objectName='views',
+                registerQuery=FALSE)
+
+        objectToPick = self.prompt.split()[0]
+        if objectToPick.endswith('s'): # plural
+            self.numberToPick = MANY
+        else:
+            self.numberToPick = ONE
+        self.pickedKw = AFXObjectKeyword(
+                command=self.command,
+                name=objectToPick.lower(),
+                isRequired=TRUE)
+
+    def getFirstStep(self):
+        self.step1 = AFXPickStep(
+                owner=self,
+                keyword=self.pickedKw,
+                prompt='Select ' + self.prompt,
+                entitiesToPick=self.entitiesToPick,
+                numberToPick=self.numberToPick,
+                #sequenceStyle=TUPLE,    # TUPLE or ARRAY
+                )
+        return self.step1
+
+    def getLoopStep(self):
+        if MANY == self.numberToPick:
+            return self.step1  # loop until canceled
+
+# {{{1 VIEWS
 
 toolset = getAFXApp().getAFXMainWindow().getPluginToolset()
 
+menu = ['&Views']
+
+class PlanarPicked(PickSomethingProcedure):
+        entitiesToPick = PLANES
+        prompt = 'Planar surface to align view'
+        method = 'alignToPlanar'
+
+toolset.registerGuiMenuButton(
+        buttonText='|'.join(menu) + '|&Align normal to plane...',
+        object=PlanarPicked(toolset),
+        kernelInitString='import views',
+        author='Carl Osterwisch',
+        version=viewsCommon.__version__,
+        helpUrl=viewsCommon.helpUrl,
+        description='Pick a planar feature to align the view'
+        )
+
+class DatumPicked(PickSomethingProcedure):
+        entitiesToPick = DATUM_CSYS | DATUM_AXES | DATUM_PLANES
+        prompt = 'Datum feature to align view'
+        method = 'alignToDatum'
+
+toolset.registerGuiMenuButton(
+        buttonText='|'.join(menu) + '|&Align to datum...',
+        object=DatumPicked(toolset),
+        kernelInitString='import views',
+        author='Carl Osterwisch',
+        version=viewsCommon.__version__,
+        helpUrl=viewsCommon.helpUrl,
+        description='Pick a datum csys, plane, or axis to align the view'
+        )
+
+class UpPicked(PickSomethingProcedure):
+        entitiesToPick = LINES
+        prompt = 'line to define vertical orientation'
+        method = 'alignToUp'
+
+toolset.registerGuiMenuButton(
+        buttonText='|'.join(menu) + '|Align vertical with picked line...',
+        object=UpPicked(toolset),
+        kernelInitString='import views',
+        author='Carl Osterwisch',
+        version=viewsCommon.__version__,
+        helpUrl=viewsCommon.helpUrl,
+        description='Pick a line to align the vertical orientation'
+        )
+
 toolset.registerKernelMenuButton(
-        buttonText='&Views|&Synchronize',
+        buttonText='|'.join(menu) + '|&Behind',
         moduleName='views',
-        functionName='synchVps()',
+        functionName='behind()',
+        author='Carl Osterwisch',
+        version=viewsCommon.__version__,
+        helpUrl=viewsCommon.helpUrl,
+        description='Flip the view 180 degrees (look behind)')
+
+toolset.registerGuiMenuButton(
+        buttonText='|'.join(menu) + '|&Edit parameters...',
+        object=viewEditForm(toolset),
+        author='Carl Osterwisch',
+        version=viewsCommon.__version__,
+        helpUrl=viewsCommon.helpUrl,
+        description='Directly edit parameters for the current view.',
+        )
+
+toolset.registerGuiMenuButton(
+        buttonText='|'.join(menu) + '|&Manager...',
+        object=viewManagerForm(toolset),
+        kernelInitString='import viewSave; viewSave.init()',
         author='Carl Osterwisch',
         version=viewsCommon.__version__,
         helpUrl=viewsCommon.helpUrl,
         applicableModules=['Visualization'],
-        description='Copy current viewport options to the others.')
+        description='Store and retrieve custom viewport views.')
 
 toolset.registerKernelMenuButton(
-        buttonText='&Views|S&wap viewport positions',
+        buttonText='|'.join(menu) + '|Reset overlay &layer transforms',
         moduleName='views',
-        functionName='swapVps()',
+        functionName='resetLayerTransform()',
         author='Carl Osterwisch',
         version=viewsCommon.__version__,
         helpUrl=viewsCommon.helpUrl,
         applicableModules=['Visualization'],
-        description='Shift the positions of multiple viewports.')
+        description='Reset all overlay layer view transforms to 1 (identity)')
 
 toolset.registerKernelMenuButton(
-        buttonText='&Views|&Snap to saved view',
+        buttonText='|'.join(menu) + '|&Snap to nearest saved view',
         moduleName='views',
         functionName='viewSnap()',
         author='Carl Osterwisch',
@@ -34,8 +145,12 @@ toolset.registerKernelMenuButton(
         helpUrl=viewsCommon.helpUrl,
         description='Snap view to closest saved view and closest up vector.')
 
+# {{{1 VIEW CUT PLUGINS
+
+menu.append('View &cut')
+
 toolset.registerKernelMenuButton(
-        buttonText='&Views|&Cut plane normal to view',
+        buttonText='|'.join(menu) + '|Cut plane &normal to view',
         moduleName='views',
         functionName='cutViewNormal()',
         author='Carl Osterwisch',
@@ -44,7 +159,7 @@ toolset.registerKernelMenuButton(
         description='Cut normal to the current view.')
 
 toolset.registerKernelMenuButton(
-        buttonText='&Views|&View normal to cut plane',
+        buttonText='|'.join(menu) + '|&View normal to cut plane',
         moduleName='views',
         functionName='viewCutNormal()',
         author='Carl Osterwisch',
@@ -53,17 +168,53 @@ toolset.registerKernelMenuButton(
         description='Orient view normal to current ' +
                     'cutting plane.')
 
-toolset.registerKernelMenuButton(
-        buttonText='&Views|View &behind',
-        moduleName='views',
-        functionName='behind()',
+class CutPlanarPicked(PickSomethingProcedure):
+        entitiesToPick = PLANES
+        prompt = 'Planar feature to define cut'
+        method = 'viewCutPlanar'
+
+toolset.registerGuiMenuButton(
+        buttonText='|'.join(menu) + '|Cut from planar feature...',
+        object=CutPlanarPicked(toolset),
+        kernelInitString='import views',
         author='Carl Osterwisch',
         version=viewsCommon.__version__,
         helpUrl=viewsCommon.helpUrl,
-        description='Flip the view 180 degrees (look behind)')
+        description='Pick a planar feature to define the cut'
+        )
+
+class viewCutPointProcedure(PickSomethingProcedure):
+        entitiesToPick = POINTS
+        prompt = 'Point to cut through'
+        method = 'viewCutPoint'
+
+toolset.registerGuiMenuButton(
+        buttonText='|'.join(menu) + '|Cut through &point...',
+        object=viewCutPointProcedure(toolset),
+        kernelInitString='import views',
+        author='Carl Osterwisch',
+        version=viewsCommon.__version__,
+        helpUrl=viewsCommon.helpUrl,
+        description='Adjust cut position to pass through picked point.'
+        )
+
+menu.pop()
+
+# {{{1 VIEWPORT PLUGINS
+
+menu.append('&Viewports')
+
+toolset.registerGuiMenuButton(
+        buttonText='|'.join(menu) + '|&Edit parameters...',
+        object=viewportEditForm(toolset),
+        author='Carl Osterwisch',
+        version=viewsCommon.__version__,
+        helpUrl=viewsCommon.helpUrl,
+        description='Edit parameters for the current viewport.',
+        )
 
 toolset.registerKernelMenuButton(
-        buttonText='&Views|View &steps',
+        buttonText='|'.join(menu) + '|For each &step of current odb',
         moduleName='views',
         functionName='viewSteps()',
         author='Carl Osterwisch',
@@ -73,113 +224,41 @@ toolset.registerKernelMenuButton(
         description='Create a new viewport for each analysis step.')
 
 toolset.registerKernelMenuButton(
-        buttonText='&Views|View &odbs',
+        buttonText='|'.join(menu) + '|For each open &odb',
         moduleName='views',
         functionName='viewOdbs()',
         author='Carl Osterwisch',
         version=viewsCommon.__version__,
         helpUrl=viewsCommon.helpUrl,
         applicableModules=['Visualization'],
-        description='Create a new viewport for each analysis step.')
+        description='Create a new viewport for each open odb.')
 
 toolset.registerKernelMenuButton(
-        buttonText='&Views|Tile &vertical',
+        buttonText='|'.join(menu) + '|&Synchronize',
+        moduleName='views',
+        functionName='synchVps()',
+        author='Carl Osterwisch',
+        version=viewsCommon.__version__,
+        helpUrl=viewsCommon.helpUrl,
+        applicableModules=['Visualization'],
+        description='Copy current viewport options to the others.')
+
+toolset.registerKernelMenuButton(
+        buttonText='|'.join(menu) + '|S&wap viewport positions',
+        moduleName='views',
+        functionName='swapVps()',
+        author='Carl Osterwisch',
+        version=viewsCommon.__version__,
+        helpUrl=viewsCommon.helpUrl,
+        applicableModules=['Visualization'],
+        description='Shift the positions of multiple viewports.')
+
+toolset.registerKernelMenuButton(
+        buttonText='|'.join(menu) + '|Tile &vertical',
         moduleName='views',
         functionName='tileVertical()',
         author='Carl Osterwisch',
         version=viewsCommon.__version__,
         helpUrl=viewsCommon.helpUrl,
         description='Arrange visible viewports side-by-side.')
-
-toolset.registerKernelMenuButton(
-        buttonText='&Views|Reset &layer transforms',
-        moduleName='views',
-        functionName='resetLayerTransform()',
-        author='Carl Osterwisch',
-        version=viewsCommon.__version__,
-        helpUrl=viewsCommon.helpUrl,
-        applicableModules=['Visualization'],
-        description='Reset layer transforms to 1 (identity)')
-
-
-class viewCutDatumProcedure(AFXProcedure):
-    def __init__(self, owner):
-        # Construct the base class
-        AFXProcedure.__init__(self, owner)
-
-        # Command
-        viewCutCommand = AFXGuiCommand(mode=self,
-                method='viewCutDatum',
-                objectName='views',
-                registerQuery=FALSE)
-
-        # Keywords
-        self.datumKw = AFXObjectKeyword(
-                command=viewCutCommand,
-                name='datum',
-                isRequired=TRUE)
-
-        viewCutCommand.setKeywordValuesToDefaults()
-
-
-    def getFirstStep(self):
-        return AFXPickStep(
-                owner=self,
-                keyword=self.datumKw,
-                prompt="Select datum plane",
-                entitiesToPick=DATUM_PLANES,
-                numberToPick=ONE,
-                sequenceStyle=ARRAY)    # TUPLE or ARRAY
-
-toolset.registerGuiMenuButton(
-        buttonText='&Views|Cut from &datum plane...',
-        object=viewCutDatumProcedure(toolset),
-        kernelInitString='import views',
-        author='Carl Osterwisch',
-        version=viewsCommon.__version__,
-        helpUrl=viewsCommon.helpUrl,
-        applicableModules=['Assembly', 'Load', 'Mesh', 'Part', 'Property'],
-        description='Create view cut from selected datum plane.'
-        )
-
-
-class viewCutPointProcedure(AFXProcedure):
-    def __init__(self, owner):
-        # Construct the base class
-        AFXProcedure.__init__(self, owner)
-
-        # Command
-        viewCutCommand = AFXGuiCommand(mode=self,
-                method='viewCutPoint',
-                objectName='views',
-                registerQuery=FALSE)
-
-        # Keywords
-        self.pointKw = AFXObjectKeyword(
-                command=viewCutCommand,
-                name='point',
-                isRequired=TRUE)
-
-        viewCutCommand.setKeywordValuesToDefaults()
-
-    def getFirstStep(self):
-        return AFXPickStep(
-                owner=self,
-                keyword=self.pointKw,
-                prompt="Select point",
-                entitiesToPick=POINTS,
-                numberToPick=ONE,
-                sequenceStyle=ARRAY)    # TUPLE or ARRAY
-
-
-toolset.registerGuiMenuButton(
-        buttonText='&Views|Cut through point...',
-        object=viewCutPointProcedure(toolset),
-        kernelInitString='import views',
-        author='Carl Osterwisch',
-        version=viewsCommon.__version__,
-        helpUrl=viewsCommon.helpUrl,
-        applicableModules=['Assembly', 'Part', 'Visualization'],
-        description='Adjust cut position to pass through given point.'
-        )
 
