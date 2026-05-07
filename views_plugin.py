@@ -117,14 +117,14 @@ toolset.registerGuiMenuButton(
         )
 
 toolset.registerGuiMenuButton(
-        buttonText='|'.join(menu) + '|&Manager...',
+        buttonText='|'.join(menu) + '|Printed view &Manager...',
         object=viewManagerForm(toolset),
         kernelInitString='import viewSave; viewSave.init()',
         author='Carl Osterwisch',
         version=viewsCommon.__version__,
         helpUrl=viewsCommon.helpUrl,
         applicableModules=['Visualization'],
-        description='Store and retrieve custom viewport views.')
+        description='Retrieve the view settings which were saved when a view was printed.')
 
 toolset.registerKernelMenuButton(
         buttonText='|'.join(menu) + '|Reset overlay &layer transforms',

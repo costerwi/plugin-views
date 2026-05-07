@@ -56,7 +56,7 @@ class viewManagerDB(AFXDataDialog):
         # Construct the base class.
         AFXDataDialog.__init__(self,
                 mode=form,
-                title="Views Manager",
+                title="Printed Views Manager",
                 opts=DIALOG_NORMAL|DECOR_RESIZE)
 
         mainframe = FXVerticalFrame(self, FRAME_SUNKEN | LAYOUT_FILL_X | LAYOUT_FILL_Y)
