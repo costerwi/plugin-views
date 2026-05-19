@@ -203,7 +203,7 @@ def synchVps(basevp=None):
             optOther = getattr(othervp.odbDisplay, opt)
             try:
                 optOther.setValues(getattr(basevp.odbDisplay, opt))
-            except TypeError:
+            except (TypeError, AttributeError):
                 pass
         if othervp.odbDisplay.name == basevp.odbDisplay.name:
             # Use the same display group if the odbs are the same
