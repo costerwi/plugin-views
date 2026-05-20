@@ -8,7 +8,7 @@ from abaqusConstants import *
 import customKernel # for registered list of userViews
 import os
 import sys
-from xml.dom import minidom
+import xml.etree.ElementTree as ET
 try:
     from xml.utils import iso8601 # date/time support
 except ImportError:
@@ -29,35 +29,41 @@ def encode(value, chars="abcdefghijklmnopqrstuvwxyz"):  # {{{2
     while(value):
         value, remainder = divmod(value, base)
         converted.append(chars[remainder])
-    converted.reverse()
-    return ''.join(converted)
+    return ''.join(reversed(converted))
 
 
-def getUniqueId(xmlElement):    # {{{2
-    "Return a unique id for this xmlElement, creating one if necessary."
-    import random
-    id = xmlElement.getAttribute('id')
-    if not id:
-        doc = xmlElement.ownerDocument
-        maxid = 2*len(doc.documentElement.childNodes)
-        intid = random.randint(0, maxid)
-        id = encode(intid)
-        while doc.getElementById(id):
+class myElementTree(ET.ElementTree):  # {{{2
+    def __init__(self, *args, **kwargs):
+        ET.ElementTree.__init__(self, *args, **kwargs)
+        self.ids = {}
+
+    def assignUniqueId(self, xmlElement):
+        """Return a unique id for this xmlElement, creating one if necessary."""
+        import random
+        xmlid = xmlElement.get('id')
+        existing = self.ids.get(xmlid)
+        if existing is not None:
+            if existing == xmlElement:
+                return xmlid
+            # element has an id but it's already in use by another element
+            xmlid = None
+        maxid = 2*len(self.ids)
+        while xmlid is None or xmlid in self.ids:
             intid = random.randint(0, maxid)
-            id = encode(intid)
-        xmlElement.setAttribute('id', id)
-    return id
+            xmlid = encode(intid)
+        xmlElement.set('id', xmlid)
+        self.ids[xmlid] = xmlElement
+        return xmlid
 
-
-def addLeaf(xmlElement, key, value=None, attrs={}): # {{{2
-    "Return a new child element of xmlElement with optional text value."
-    leaf = xmlElement.ownerDocument.createElement(key)
-    if value:
-        leaf.appendChild(
-            xmlElement.ownerDocument.createTextNode(repr(value)))
-    for k, v in attrs.items():
-        leaf.setAttribute(k, v)
-    return xmlElement.appendChild(leaf)
+    def getElementById(self, id):
+        """Quickly find element by id"""
+        element = self.ids.get(id)
+        if element is None:
+            # initialize the lookup
+            for element in self.findall(".//*[@id]"):
+                self.ids[element.get("id")] = element
+            element = self.ids.get(id)
+        return element
 
 
 ###############################################################################
@@ -87,13 +93,11 @@ def saveViewCut(xmlElement, viewCut):   # {{{2
         else:
             arguments.append('origin')
     for attr in arguments:
-        attrElement = xmlElement.ownerDocument.createElement(attr)
-        attrElement.setAttribute('type', 'argument')
-        xmlElement.appendChild(attrElement)
+        attrElement = ET.SubElement(xmlElement, attr)
+        attrElement.set('type', 'argument')
         saveXml(attrElement, getattr(viewCut, attr))
     for attr in members:
-        attrElement = xmlElement.ownerDocument.createElement(attr)
-        xmlElement.appendChild(attrElement)
+        attrElement = ET.SubElement(xmlElement, attr)
         saveXml(attrElement, getattr(viewCut, attr))
 
 
@@ -102,17 +106,16 @@ def saveActiveViewCut(xmlElement, abaqusObject): # {{{2
     viewCutNames=[]
     for viewCut in abaqusObject.viewCuts.values():
         if viewCut.active:
-            vcElement = addLeaf(xmlElement, 'ViewCut')
+            vcElement = ET.SubElement(xmlElement, 'ViewCut')
             saveXml(vcElement, viewCut)
             viewCutNames.append(viewCut.name)
-    vc = addLeaf(xmlElement, 'viewCut')
+    vc = ET.SubElement(xmlElement, 'viewCut')
     if len(viewCutNames):
-        addLeaf(xmlElement, 'viewCutNames', viewCutNames)
-        vc.appendChild(
-            xmlElement.ownerDocument.createTextNode('ON'))
+        e = ET.SubElement(xmlElement, 'viewCutNames')
+        e.text = str(viewCutNames)
+        vc.text = 'ON'
     else:
-        vc.appendChild(
-            xmlElement.ownerDocument.createTextNode('OFF'))
+        vc.text = 'OFF'
 
 
 def savePlotStateOptions(xmlElement, odbDisplay):   # {{{2
@@ -124,8 +127,11 @@ def savePlotStateOptions(xmlElement, odbDisplay):   # {{{2
             ORIENT_ON_DEF in plotState:
         deformedVariable = odbDisplay.deformedVariable[0]
         if len(deformedVariable):
-            cmdElement = addLeaf(xmlElement, 'setDeformedVariable')
-            addLeaf(cmdElement, 'variableLabel', deformedVariable, {'type': 'argument'})
+            cmdElement = ET.SubElement(xmlElement, 'setDeformedVariable')
+            label = ET.SubElement(cmdElement, 'variableLabel')
+            label.set('type', 'argument')
+            label.text = repr(deformedVariable)
+
     if CONTOURS_ON_UNDEF in plotState or \
             CONTOURS_ON_DEF in plotState:
         primVar = odbDisplay.primaryVariable
@@ -133,46 +139,51 @@ def savePlotStateOptions(xmlElement, odbDisplay):   # {{{2
             varPos = [ UNDEFINED_POSITION, NODAL, INTEGRATION_POINT, ELEMENT_FACE,
                 ELEMENT_NODAL, WHOLE_ELEMENT, ELEMENT_CENTROID, WHOLE_REGION,
                 WHOLE_PART_INSTANCE, WHOLE_MODEL, GENERAL_PARTICLE ][primVar[1]]
-            cmdElement = addLeaf(xmlElement, 'setPrimaryVariable')
-            addLeaf(cmdElement, 'variableLabel', primVar[0], {'type': 'argument'})
-            addLeaf(cmdElement, 'outputPosition', varPos, {'type': 'argument'})
+            cmdElement = ET.SubElement(xmlElement, 'setPrimaryVariable')
+            label = ET.SubElement(cmdElement, 'variableLabel')
+            label.set('type', 'argument')
+            label.text = repr(primVar[0])
+            pos = ET.SubElement(cmdElement, 'outputPosition')
+            pos.set('type', 'argument')
+            pos.text = str(varPos)
             if primVar[4]:
                 refType = [ NO_REFINEMENT, INVARIANT, COMPONENT ][primVar[4]]
-                addLeaf(cmdElement, 'refinement',
-                        (refType, primVar[5]), {'type': 'argument'})
-        saveXml(addLeaf(xmlElement, 'contourOptions'), odbDisplay.contourOptions)
+                ref = ET.SubElement(cmdElement, 'refinement')
+                ref.set('type', 'argument')
+                ref.text = "({}, {!r})".format(refType, primVar[5])
+        saveXml(ET.SubElement(xmlElement, 'contourOptions'), odbDisplay.contourOptions)
     if SYMBOLS_ON_UNDEF in plotState or \
             SYMBOLS_ON_DEF in plotState or \
             ORIENT_ON_UNDEF in plotState or \
             ORIENT_ON_DEF in plotState:
-        saveXml(addLeaf(xmlElement, 'symbolOptions'), odbDisplay.symbolOptions)
+        saveXml(ET.SubElement(xmlElement, 'symbolOptions'), odbDisplay.symbolOptions)
     if len(plotState) > 1:
-        saveXml(addLeaf(xmlElement, 'superimposeOptions'), odbDisplay.superimposeOptions)
+        saveXml(ET.SubElement(xmlElement, 'superimposeOptions'), odbDisplay.superimposeOptions)
 
 def saveAnnotations(xmlElement, userData):  # {{{2
     "Store current annotations"
     for ann in userData.annotations.values():
         if isinstance(ann, abaqus.ArrowType):
-            anElement = addLeaf(xmlElement, 'Arrow')
+            anElement = ET.SubElement(xmlElement, 'Arrow')
         else:
-            anElement = addLeaf(xmlElement, 'Text')
+            anElement = ET.SubElement(xmlElement, 'Text')
         saveXml(anElement, ann)
 
 
 def saveWindowState(xmlElement, viewport):  # {{{2
     "Store whether the viewport is normal or maximized"
     if MAXIMIZED == viewport.windowState:
-        addLeaf(xmlElement, 'maximize')
+        ET.SubElement(xmlElement, 'maximize')
     elif MINIMIZED == viewport.windowState:
-        addLeaf(xmlElement, 'minimize')
+        ET.SubElement(xmlElement, 'minimize')
     elif NORMAL == viewport.windowState:
-        addLeaf(xmlElement, 'restore')
+        ET.SubElement(xmlElement, 'restore')
 
 
 def saveColorMode(xmlElement, viewport):  # {{{2
     "Store the viewport colorMode"
     if DEFAULT_COLORS == viewport.colorMode:
-        addLeaf(xmlElement, 'disableMultipleColors')
+        ET.SubElement(xmlElement, 'disableMultipleColors')
         return
     for name, cmap in viewport.colorMappings.items():
         if str(viewport.colorMode).startswith(str(cmap.type)):
@@ -182,7 +193,7 @@ def saveColorMode(xmlElement, viewport):  # {{{2
             print('unknown colorMode', viewport.colorMode)
         return
     # TODO
-    #addLeaf(xmlElement, 'enableMultipleColors')
+    #ET.SubElement(xmlElement, 'enableMultipleColors')
     if debug:
         print('colorMode', name)
 
@@ -190,17 +201,17 @@ def saveColorMode(xmlElement, viewport):  # {{{2
 knownObjects = {    # {{{2 What to save from each element type
     'Odb' : [ 'userData' ],
     'UserData': [ saveAnnotations ],
-    'Text' : [ 'box', 'justification', 'referencePoint', 'color', 'text', 'backgroundStyle',
+    'Text' : [ 'name', 'box', 'justification', 'referencePoint', 'color', 'text', 'backgroundStyle',
         'rotationAngle', 'backgroundColor', 'offset', 'font', 'anchor' ],
-    'Viewport': [saveWindowState, saveColorMode,
+    'Viewport': ['name', saveWindowState, saveColorMode,
         'origin', 'width', 'height',
         'viewportAnnotationOptions', 'view', 'odbDisplay'],
     'View': ['projection',
         'cameraTarget', 'cameraPosition', 'cameraUpVector',
         'width', 'viewOffsetX', 'viewOffsetY'],
-    'OdbDisplay': ['display', savePlotStateOptions, 'commonOptions',
+    'OdbDisplay': ['name', 'display', savePlotStateOptions, 'basicOptions', 'commonOptions',
         'viewCutOptions', saveActiveViewCut ],
-    'ViewCut': [ saveViewCut ],
+    'ViewCut': [ 'name', saveViewCut ],
     'float' : [],
     'int': [],
     'bool': [],
@@ -212,16 +223,13 @@ skipMembers = {
         'autoDeformationScaleValue',
         'autoMaxValue',
         'autoMinValue',
-        'name',
         'fieldOfViewAngle',
         }
 
 def saveXml(xmlElement, abaqusObject):  # {{{2
-    "Recursively read abaqus data and store in xml dom."
+    "Recursively read abaqus data and store in xmldoc."
 
     import re
-    if hasattr(abaqusObject, 'name'):
-        xmlElement.setAttribute('name', abaqusObject.name)
 
     # Must convert type to string since Abaqus does not define all types
     m = re.search(r"'(?:abaqus\.)?(.+)'", str(type(abaqusObject)))
@@ -241,38 +249,39 @@ def saveXml(xmlElement, abaqusObject):  # {{{2
         if debug:
             print("unknownObject %r has members %r"%(typeName, members))
 
-    if len(members):
-        # Complex type with data members
-        for attr in members:
-            if debug:
-                print("saving member %r"%attr)
-            if callable(attr):
-                attr(xmlElement, abaqusObject)
-            elif hasattr(abaqusObject, attr):
-                saveXml(addLeaf(xmlElement, attr),
-                        getattr(abaqusObject, attr))
-    else:
+    if len(members) == 0:
         # No data members - insert the string value of this object
-        xmlElement.appendChild(
-            xmlElement.ownerDocument.createTextNode(repr(abaqusObject)))
+        xmlElement.text = repr(abaqusObject)
+        return
+    # Complex type with data members
+    for attr in members:
+        if debug:
+            print("saving member %r"%attr)
+        if 'name' == attr:
+            xmlElement.set('name', abaqusObject.name)
+        elif callable(attr):
+            attr(xmlElement, abaqusObject)
+        elif hasattr(abaqusObject, attr):
+            saveXml(ET.SubElement(xmlElement, attr),
+                    getattr(abaqusObject, attr))
 
 
 def addSessionUserView(xmlView):    # {{{2 Update customData.userViews for the GUI
     "Add a view to the session.customData"
-    id = str(getUniqueId(xmlView))
-    name = str(xmlView.getAttribute('name'))
-    datestr = xmlView.getAttribute('dateTime')
-    userData = xmlView.getElementsByTagName('userData')
-    if datestr:
+    id = xmldoc.assignUniqueId(xmlView)
+    name = xmlView.get('name', 'unknown')
+    datestr = xmlView.get('dateTime')
+    userData = xmlView.find('./Odb/userData')
+    if datestr is not None:
         dateTime = iso8601.parse(datestr)
         localtime = iso8601.time.localtime(dateTime)
         datestr = iso8601.time.strftime('%Y-%m-%d %H:%M', localtime)
-    if userData:
+    if userData is not None:
         ud = '*'
     else:
         ud = ''
-    for od in xmlView.getElementsByTagName("odbDisplay"):
-        odbName = str(od.getAttribute('name'))
+    for od in xmlView.findall("./Viewport/odbDisplay"):
+        odbName = str(od.get('name'))
         abaqus.session.customData.userViews.append(
                 (id, name, datestr, odbName, ud) )
 
@@ -282,41 +291,35 @@ def addSessionUserView(xmlView):    # {{{2 Update customData.userViews for the G
 def restoreXml(xmlElement, abaqusObject):
     "Recursively extract xml data and set abaqus values"
     if callable(abaqusObject):
-        arguments=dict([ (str(key), str(value))
-            for key, value in xmlElement.attributes.items() ])
-        for xmlChild in xmlElement.childNodes:
-            if xmlChild.ELEMENT_NODE == xmlChild.nodeType and \
-                    xmlChild.getAttribute('type') == u'argument':
-                        arguments[str(xmlChild.tagName)] = \
-                                eval(restoreXml(xmlChild, None))
+        arguments=xmlElement.attrib.copy()
+        for xmlChild in xmlElement:
+            if xmlChild.get('type') == 'argument':
+                arguments[xmlChild.tag] = eval(restoreXml(xmlChild, None))
         if debug:
-            print(xmlElement.tagName, "( %r )"%arguments)
+            print(xmlElement.tag, "( %r )"%arguments)
         try:
             abaqusObject = abaqusObject(**arguments)
-        except: # TODO better error checking!
+        except Exception as e: # TODO better error checking!
+            if debug: print("Exception in restoreXml:", e)
             if 'name' in arguments:
                 abaqusObject = abaqusObject(name=arguments['name'])
 
     setValues = {}
-    text = ''
-    for xmlChild in xmlElement.childNodes:
-        if xmlChild.ELEMENT_NODE == xmlChild.nodeType and \
-            not len(xmlChild.getAttribute('type')):
-                abaqusChild = getattr(abaqusObject, xmlChild.tagName, None)
+    for xmlChild in xmlElement:
+        if xmlChild.get('type') is None:
+                abaqusChild = getattr(abaqusObject, xmlChild.tag, None)
                 value = restoreXml(xmlChild, abaqusChild)
                 if len(value):
                     try:
-                        setValues[str(xmlChild.tagName)] = eval(value)
+                        setValues[xmlChild.tag] = eval(value)
                     except AttributeError as e:
                         print(e, repr(value))
-        elif xmlChild.TEXT_NODE == xmlChild.nodeType:
-            text += xmlChild.data
 
     if hasattr(abaqusObject, 'setValues'):
         removed = {}
         while len(setValues):
             if debug:
-                print(xmlElement.tagName, ".setValues %r"%setValues)
+                print(xmlElement.tag, ".setValues %r"%setValues)
             try:
                 abaqusObject.setValues(**setValues)
                 if debug and removed:
@@ -330,10 +333,10 @@ def restoreXml(xmlElement, abaqusObject):
                     removed[last] = setValues[last]
                     del setValues[last]
                 else:
-                    print(repr(abaqusObject), xmlElement.tagName, msg)
+                    print(repr(abaqusObject), xmlElement.tag, msg)
                     break # failed for other reason
 
-    return text.strip()
+    return (xmlElement.text or '').strip()
 
 # {{{1 File access functions ##################################################
 
@@ -341,25 +344,13 @@ def readXmlFile(fileName):  # {{{2
     "Read fileName into xmldoc or create a new xmldoc if necessary"
     global xmldoc, xmlFileName
     if os.path.exists(fileName):
-        doc = minidom.parse(fileName)
+        with open(fileName) as file:
+            doc = myElementTree(file=file)
     else:
         # Create a new document
-        doc = minidom.parseString('<?xml version="1.0" ?>\n'
-            '<!DOCTYPE userViews [<!ATTLIST userView id ID #IMPLIED>]>\n'
-            '<!-- Saved settings for the View Manager Abaqus plugin -->\n'
-            '<userViews />')
-#        impl = minidom.getDOMImplementation()
-#        doctype = impl.createDocumentType(
-#                qualifiedName="userViews",
-#                publicId=None,
-#                systemId=None)
-#        doctype.internalSubset=u'<!ATTLIST userView id ID #IMPLIED>'
-#        doc = impl.createDocument(
-#                namespaceURI=None,
-#                qualifiedName="userViews",
-#                doctype=doctype)
+        doc = myElementTree(ET.Element("userViews"))
         doc.changed = 1
-    fileType = doc.documentElement.tagName
+    fileType = doc.getroot().tag
     if not "userViews" == fileType:
         return abaqus.getWarningReply(
                 '%r is not userViews file format'%fileType,
@@ -371,7 +362,9 @@ def readXmlFile(fileName):  # {{{2
     while len(abaqus.session.customData.userViews) > 0:
         del abaqus.session.customData.userViews[0]
     # Add new views
-    for view in xmldoc.getElementsByTagName("userView"):
+    for view in xmldoc.getroot().findall("userView"):
+        if debug:
+            print('view', view.get('name'))
         addSessionUserView(view)
 
 
@@ -382,7 +375,7 @@ def writeXmlFile(fileName=None): # {{{2
     if not fileName:
         fileName=xmlFileName
     bkupName = fileName + '~'
-    open(bkupName, 'w').write(xmldoc.toxml())
+    xmldoc.write(bkupName)
     if os.path.exists(fileName):
         os.remove(fileName)
     os.rename(bkupName, fileName)
@@ -394,24 +387,25 @@ def writeXmlFile(fileName=None): # {{{2
 def printToFileCallback(callingObject, args, kws, user):    # {{{2
     "Add a new userView to the xml document"
 
-    userView = addLeaf(xmldoc.documentElement, 'userView')
-    userView.setAttribute('name', kws['fileName'])
-    userView.setAttribute('abaqusViewer',
+    userView = ET.SubElement(xmldoc.getroot(), 'userView')
+    userView.set('name', kws['fileName'])
+    userView.set('abaqusViewer',
             '%s.%s-%s'%(abaqus.majorVersion, abaqus.minorVersion,
                 abaqus.updateVersion))
     now = iso8601.time.time()
-    userView.setAttribute('dateTime', iso8601.tostring(now))
-    userView.setAttribute('version', str(viewsCommon.__version__))
+    userView.set('dateTime', iso8601.tostring(now))
+    userView.set('version', str(viewsCommon.__version__))
+    xmldoc.assignUniqueId(userView)
 
-    for object in kws['canvasObjects']:
-        if isinstance(object, abaqus.ViewportType):
-            if hasattr(object.odbDisplay, 'name'):
-                odb = abaqus.session.odbs[object.odbDisplay.name]
+    for canvasObject in kws['canvasObjects']:
+        if isinstance(canvasObject, abaqus.ViewportType):
+            if hasattr(canvasObject.odbDisplay, 'name'):
+                odb = abaqus.session.odbs[canvasObject.odbDisplay.name]
                 if len(odb.userData.annotations):
-                    odbElement = addLeaf(userView, 'Odb')
+                    odbElement = ET.SubElement(userView, 'Odb')
                     saveXml(odbElement, odb)
-            vpElement = addLeaf(userView, 'Viewport')
-            saveXml(vpElement, object)
+            vpElement = ET.SubElement(userView, 'Viewport')
+            saveXml(vpElement, canvasObject)
     addSessionUserView(userView) # pass to gui
     xmldoc.changed = 1
     writeXmlFile()
@@ -423,34 +417,34 @@ def setView(viewId):    # {{{2 Restore the specified xml userview Id
     Called by viewManagerForm when executing the form command.
     """
     xmlView = xmldoc.getElementById(viewId)
-    if not xmlView:
+    if xmlView is None:
         print("View %r not in userViews database."%viewId)
-    else:
-        datestr = xmlView.getAttribute('dateTime')
-        if datestr:
-            dateTime = iso8601.parse(datestr)
-            localtime = iso8601.time.localtime(dateTime)
-            datestr = iso8601.time.strftime('%Y-%m-%d %H:%M', localtime)
-        print(xmlView.getAttribute('name'), datestr)
-        vps = xmlView.getElementsByTagName('Viewport')
-        vpObject = list(abaqus.session.viewports.values())[0]  # current viewport
-        if len(vps) > 1:
-            for vpElement in vps:
-                vpname = str(vpElement.getAttribute('name'))
-                if vpname in abaqus.session.viewports:
-                    vpObject = abaqus.session.viewports[vpname]
-                else:
-                    # Create viewports as necessary for the userView
-                    odb = abaqus.session.odbs[vpObject.odbDisplay.name]
-                    vpObject = abaqus.session.Viewport(name=vpname)
-                    vpObject.setValues(displayedObject=odb)
-                restoreXml(vpElement, vpObject)
-        elif len(vps) == 1:
-            vpElement = vps[0]
-            # restoreXml settings to the current viewport
+        return
+    datestr = xmlView.get('dateTime')
+    if datestr:
+        dateTime = iso8601.parse(datestr)
+        localtime = iso8601.time.localtime(dateTime)
+        datestr = iso8601.time.strftime('%Y-%m-%d %H:%M', localtime)
+    print(xmlView.get('name'), datestr)
+    vps = xmlView.findall('Viewport')
+    vpObject = list(abaqus.session.viewports.values())[0]  # current viewport
+    if len(vps) > 1:
+        for vpElement in vps:
+            vpname = str(vpElement.get('name'))
+            if vpname in abaqus.session.viewports:
+                vpObject = abaqus.session.viewports[vpname]
+            else:
+                # Create viewports as necessary for the userView
+                odb = abaqus.session.odbs[vpObject.odbDisplay.name]
+                vpObject = abaqus.session.Viewport(name=vpname)
+                vpObject.setValues(displayedObject=odb)
             restoreXml(vpElement, vpObject)
-        else:
-            print("No viewports defined.")
+    elif len(vps) == 1:
+        vpElement = vps[0]
+        # restoreXml settings to the current viewport
+        restoreXml(vpElement, vpObject)
+    else:
+        print("No viewports defined.")
 
 def setAnnotation(viewId):    # {{{2 Restore annotations from the specified xml userview Id
     """Retrieve the xmlElement for the identified userView.
@@ -461,42 +455,43 @@ def setAnnotation(viewId):    # {{{2 Restore annotations from the specified xml 
     if not xmlView:
         print("View %r not in userViews database."%viewId)
         return
-    datestr = xmlView.getAttribute('dateTime')
+    datestr = xmlView.get('dateTime')
     if datestr:
         dateTime = iso8601.parse(datestr)
         localtime = iso8601.time.localtime(dateTime)
         datestr = iso8601.time.strftime('%Y-%m-%d %H:%M', localtime)
-    print(xmlView.getAttribute('name'), datestr)
-    xmlUserData = xmlView.getElementsByTagName('userData')
-    if not xmlUserData:
+    print(xmlView.get('name'), datestr)
+    xmlUserData = xmlView.find('./Odb/userData')
+    if xmlUserData is None:
         print("View does not contain annotations.")
         return
 
     vpObject = abaqus.session.viewports.values()[0]  # current viewport
     userData = abaqus.session.odbs[vpObject.odbDisplay.name].userData
-    restoreXml(xmlUserData[0], userData)    # XXX only reads first value
+    restoreXml(xmlUserData, userData)    # XXX only reads first value
     for ann in userData.annotations.values():    # TODO only plot new annotations
         vpObject.plotAnnotation(ann)
 
 def deleteViews(viewIds):   # {{{2 Delete a userview from the database
     "Remove the specified views from the database."
+    userViews = xmldoc.getroot()
     for viewId in viewIds:
-        xmlView = xmldoc.getElementById(viewId)
-        if xmlView:
-            xmlView.parentNode.removeChild(xmlView)
-            xmlView.unlink()
-            xmldoc.changed = 1
-        else:
-            print("View %r not in userViews database."%viewId)
+        userView = xmldoc.getElementById(viewId)
+        userViews.remove(userView)
+        del xmldoc.ids[viewId]
+        xmldoc.changed = 1
     for view in reversed(abaqus.session.customData.userViews):
         if view[0] in viewIds:
             abaqus.session.customData.userViews.remove(view)
+    writeXmlFile()
 
 def renameView(viewId, name):   # {{{2 Rename a userview
     "Modify the view name in the database."
     xmlView = xmldoc.getElementById(viewId)
-    if xmlView:
-        xmlView.setAttribute('name', name)
+    if xmlView is None:
+        print("View %r not in userViews database."%viewId)
+    else:
+        xmlView.set('name', name)
         views = abaqus.session.customData.userViews
         for rownum, row in enumerate(views):
             if row[0] == viewId:
@@ -504,8 +499,7 @@ def renameView(viewId, name):   # {{{2 Rename a userview
                 copy[1] = name
                 views[rownum] = tuple(copy)
         xmldoc.changed = 1
-    else:
-        print("View %r not in userViews database."%viewId)
+    writeXmlFile()
 
 
 def init(): # {{{2
