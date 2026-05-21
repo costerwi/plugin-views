@@ -20,7 +20,7 @@ debug = os.environ.get('DEBUG')
 
 # {{{1 Utility functions ######################################################
 
-def encode(value, chars="abcdefghijklmnopqrstuvwxyz"):  # {{{2
+def encode(value=0, chars="abcdefghijklmnopqrstuvwxyz"):  # {{{2
     "Return the int value encoded into arbitrary base defined by chars."
     if not value:
         return chars[0]
@@ -47,7 +47,7 @@ class myElementTree(ET.ElementTree):  # {{{2
                 return xmlid
             # element has an id but it's already in use by another element
             xmlid = None
-        maxid = 2*len(self.ids)
+        maxid = max(26, 2*len(self.ids))
         while xmlid is None or xmlid in self.ids:
             intid = random.randint(0, maxid)
             xmlid = encode(intid)
@@ -160,6 +160,16 @@ def savePlotStateOptions(xmlElement, odbDisplay):   # {{{2
     if len(plotState) > 1:
         saveXml(ET.SubElement(xmlElement, 'superimposeOptions'), odbDisplay.superimposeOptions)
 
+def saveUserSpectrum(xmlElement, session):  # {{{2
+    """Store any custom color spectrum"""
+    for spectrum in session.spectrums.values():
+        if spectrum.type == USER_DEFINED:
+            xmlSpectrum = ET.SubElement(xmlElement, 'Spectrum')
+            xmlSpectrum.set('name', spectrum.name)
+            xmlColors = ET.SubElement(xmlSpectrum, 'colors')
+            xmlColors.set('type', 'argument')
+            xmlColors.text = str(spectrum.colors)
+
 def saveAnnotations(xmlElement, userData):  # {{{2
     "Store current annotations"
     for ann in userData.annotations.values():
@@ -199,6 +209,7 @@ def saveColorMode(xmlElement, viewport):  # {{{2
 
 
 knownObjects = {    # {{{2 What to save from each element type
+    'Session' : [ saveUserSpectrum ],
     'Odb' : [ 'userData' ],
     'UserData': [ saveAnnotations ],
     'Text' : [ 'name', 'box', 'justification', 'referencePoint', 'color', 'text', 'backgroundStyle',
@@ -397,6 +408,7 @@ def printToFileCallback(callingObject, args, kws, user):    # {{{2
     userView.set('version', str(viewsCommon.__version__))
     xmldoc.assignUniqueId(userView)
 
+    saveXml(userView, session)  # save some session data
     for canvasObject in kws['canvasObjects']:
         if isinstance(canvasObject, abaqus.ViewportType):
             if hasattr(canvasObject.odbDisplay, 'name'):
@@ -426,6 +438,8 @@ def setView(viewId):    # {{{2 Restore the specified xml userview Id
         localtime = iso8601.time.localtime(dateTime)
         datestr = iso8601.time.strftime('%Y-%m-%d %H:%M', localtime)
     print(xmlView.get('name'), datestr)
+    for spectrum in xmlView.findall('Spectrum'):
+        restoreXml(spectrum, session.Spectrum)
     vps = xmlView.findall('Viewport')
     vpObject = list(abaqus.session.viewports.values())[0]  # current viewport
     if len(vps) > 1:
