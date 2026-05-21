@@ -195,7 +195,7 @@ class viewManagerDB(AFXDataDialog):
     def onAnnotation(self, sender, sel, ptr):
         "Annotation button was pushed"
         selected = self.getMode().viewId.getValue()
-        sendCommand("viewSave.setAnnotation(viewId=%r)"%selected)
+        sendCommand("viewSave.restoreAnnotations(viewId=%r)"%selected)
         return 0
 
 
@@ -237,8 +237,8 @@ class viewManagerForm(AFXForm):
         AFXForm.__init__(self, owner) # Construct the base class.
                 
         # Commands.
-        setView = AFXGuiCommand(mode=self, method='setView', objectName='viewSave')
-        self.viewId = AFXStringKeyword(command=setView, 
+        restoreView = AFXGuiCommand(mode=self, method='restoreView', objectName='viewSave')
+        self.viewId = AFXStringKeyword(command=restoreView,
                 name='viewId',
                 isRequired=TRUE,
                 defaultValue='0')

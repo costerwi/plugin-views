@@ -95,10 +95,10 @@ def saveViewCut(xmlElement, viewCut):   # {{{2
     for attr in arguments:
         attrElement = ET.SubElement(xmlElement, attr)
         attrElement.set('type', 'argument')
-        saveXml(attrElement, getattr(viewCut, attr))
+        saveObject(attrElement, getattr(viewCut, attr))
     for attr in members:
         attrElement = ET.SubElement(xmlElement, attr)
-        saveXml(attrElement, getattr(viewCut, attr))
+        saveObject(attrElement, getattr(viewCut, attr))
 
 
 def saveActiveViewCut(xmlElement, abaqusObject): # {{{2
@@ -107,7 +107,7 @@ def saveActiveViewCut(xmlElement, abaqusObject): # {{{2
     for viewCut in abaqusObject.viewCuts.values():
         if viewCut.active:
             vcElement = ET.SubElement(xmlElement, 'ViewCut')
-            saveXml(vcElement, viewCut)
+            saveObject(vcElement, viewCut)
             viewCutNames.append(viewCut.name)
     vc = ET.SubElement(xmlElement, 'viewCut')
     if len(viewCutNames):
@@ -151,14 +151,14 @@ def savePlotStateOptions(xmlElement, odbDisplay):   # {{{2
                 ref = ET.SubElement(cmdElement, 'refinement')
                 ref.set('type', 'argument')
                 ref.text = "({}, {!r})".format(refType, primVar[5])
-        saveXml(ET.SubElement(xmlElement, 'contourOptions'), odbDisplay.contourOptions)
+        saveObject(ET.SubElement(xmlElement, 'contourOptions'), odbDisplay.contourOptions)
     if SYMBOLS_ON_UNDEF in plotState or \
             SYMBOLS_ON_DEF in plotState or \
             ORIENT_ON_UNDEF in plotState or \
             ORIENT_ON_DEF in plotState:
-        saveXml(ET.SubElement(xmlElement, 'symbolOptions'), odbDisplay.symbolOptions)
+        saveObject(ET.SubElement(xmlElement, 'symbolOptions'), odbDisplay.symbolOptions)
     if len(plotState) > 1:
-        saveXml(ET.SubElement(xmlElement, 'superimposeOptions'), odbDisplay.superimposeOptions)
+        saveObject(ET.SubElement(xmlElement, 'superimposeOptions'), odbDisplay.superimposeOptions)
 
 def saveUserSpectrum(xmlElement, session):  # {{{2
     """Store any custom color spectrum"""
@@ -177,7 +177,7 @@ def saveAnnotations(xmlElement, userData):  # {{{2
             anElement = ET.SubElement(xmlElement, 'Arrow')
         else:
             anElement = ET.SubElement(xmlElement, 'Text')
-        saveXml(anElement, ann)
+        saveObject(anElement, ann)
 
 
 def saveWindowState(xmlElement, viewport):  # {{{2
@@ -237,7 +237,7 @@ skipMembers = {
         'fieldOfViewAngle',
         }
 
-def saveXml(xmlElement, abaqusObject):  # {{{2
+def saveObject(xmlElement, abaqusObject):  # {{{2
     "Recursively read abaqus data and store in xmldoc."
 
     import re
@@ -273,8 +273,23 @@ def saveXml(xmlElement, abaqusObject):  # {{{2
         elif callable(attr):
             attr(xmlElement, abaqusObject)
         elif hasattr(abaqusObject, attr):
-            saveXml(ET.SubElement(xmlElement, attr),
+            saveObject(ET.SubElement(xmlElement, attr),
                     getattr(abaqusObject, attr))
+
+
+def saveCurrentState(userView, abaqusObjects):  # {{{2
+    """Main method called to record everything to an xml userView"""
+    saveObject(userView, session)  # save some session data
+    for abaqusObject in abaqusObjects:
+        if isinstance(abaqusObject, abaqus.ViewportType):
+            if hasattr(abaqusObject.odbDisplay, 'name'):
+                odb = abaqus.session.odbs[abaqusObject.odbDisplay.name]
+                if len(odb.userData.annotations):
+                    odbElement = ET.SubElement(userView, 'Odb')
+                    saveObject(odbElement, odb)
+            vpElement = ET.SubElement(userView, 'Viewport')
+            saveObject(vpElement, abaqusObject)
+    return userView
 
 
 def addSessionUserView(xmlView):    # {{{2 Update customData.userViews for the GUI
@@ -299,19 +314,19 @@ def addSessionUserView(xmlView):    # {{{2 Update customData.userViews for the G
 
 # {{{1 Functions to restore a view from the database ##########################
 
-def restoreXml(xmlElement, abaqusObject):
+def restoreObject(xmlElement, abaqusObject):
     "Recursively extract xml data and set abaqus values"
     if callable(abaqusObject):
         arguments=xmlElement.attrib.copy()
         for xmlChild in xmlElement:
             if xmlChild.get('type') == 'argument':
-                arguments[xmlChild.tag] = eval(restoreXml(xmlChild, None))
+                arguments[xmlChild.tag] = eval(restoreObject(xmlChild, None))
         if debug:
             print(xmlElement.tag, "( %r )"%arguments)
         try:
             abaqusObject = abaqusObject(**arguments)
         except Exception as e: # TODO better error checking!
-            if debug: print("Exception in restoreXml:", e)
+            if debug: print("Exception in restoreObject:", e)
             if 'name' in arguments:
                 abaqusObject = abaqusObject(name=arguments['name'])
 
@@ -319,7 +334,7 @@ def restoreXml(xmlElement, abaqusObject):
     for xmlChild in xmlElement:
         if xmlChild.get('type') is None:
                 abaqusChild = getattr(abaqusObject, xmlChild.tag, None)
-                value = restoreXml(xmlChild, abaqusChild)
+                value = restoreObject(xmlChild, abaqusChild)
                 if len(value):
                     try:
                         setValues[xmlChild.tag] = eval(value)
@@ -407,23 +422,13 @@ def printToFileCallback(callingObject, args, kws, user):    # {{{2
     userView.set('dateTime', iso8601.tostring(now))
     userView.set('version', str(viewsCommon.__version__))
     xmldoc.assignUniqueId(userView)
-
-    saveXml(userView, session)  # save some session data
-    for canvasObject in kws['canvasObjects']:
-        if isinstance(canvasObject, abaqus.ViewportType):
-            if hasattr(canvasObject.odbDisplay, 'name'):
-                odb = abaqus.session.odbs[canvasObject.odbDisplay.name]
-                if len(odb.userData.annotations):
-                    odbElement = ET.SubElement(userView, 'Odb')
-                    saveXml(odbElement, odb)
-            vpElement = ET.SubElement(userView, 'Viewport')
-            saveXml(vpElement, canvasObject)
+    saveCurrentState(userView, kws['canvasObjects'])
     addSessionUserView(userView) # pass to gui
     xmldoc.changed = 1
     writeXmlFile()
 
 
-def setView(viewId):    # {{{2 Restore the specified xml userview Id
+def restoreView(viewId):    # {{{2 Restore the specified xml userview Id
     """Retrieve the xmlElement for the identified userView.
 
     Called by viewManagerForm when executing the form command.
@@ -439,7 +444,7 @@ def setView(viewId):    # {{{2 Restore the specified xml userview Id
         datestr = iso8601.time.strftime('%Y-%m-%d %H:%M', localtime)
     print(xmlView.get('name'), datestr)
     for spectrum in xmlView.findall('Spectrum'):
-        restoreXml(spectrum, session.Spectrum)
+        restoreObject(spectrum, session.Spectrum)
     vps = xmlView.findall('Viewport')
     vpObject = list(abaqus.session.viewports.values())[0]  # current viewport
     if len(vps) > 1:
@@ -452,15 +457,15 @@ def setView(viewId):    # {{{2 Restore the specified xml userview Id
                 odb = abaqus.session.odbs[vpObject.odbDisplay.name]
                 vpObject = abaqus.session.Viewport(name=vpname)
                 vpObject.setValues(displayedObject=odb)
-            restoreXml(vpElement, vpObject)
+            restoreObject(vpElement, vpObject)
     elif len(vps) == 1:
         vpElement = vps[0]
-        # restoreXml settings to the current viewport
-        restoreXml(vpElement, vpObject)
+        # restoreObject settings to the current viewport
+        restoreObject(vpElement, vpObject)
     else:
         print("No viewports defined.")
 
-def setAnnotation(viewId):    # {{{2 Restore annotations from the specified xml userview Id
+def restoreAnnotations(viewId):    # {{{2 Restore annotations from the specified xml userview Id
     """Retrieve the xmlElement for the identified userView.
 
     Called by viewManagerDB to restore saved annotations.
@@ -482,7 +487,7 @@ def setAnnotation(viewId):    # {{{2 Restore annotations from the specified xml 
 
     vpObject = abaqus.session.viewports.values()[0]  # current viewport
     userData = abaqus.session.odbs[vpObject.odbDisplay.name].userData
-    restoreXml(xmlUserData, userData)    # XXX only reads first value
+    restoreObject(xmlUserData, userData)    # XXX only reads first value
     for ann in userData.annotations.values():    # TODO only plot new annotations
         vpObject.plotAnnotation(ann)
 
