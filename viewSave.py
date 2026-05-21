@@ -3,7 +3,6 @@
 from __future__ import print_function
 import viewsCommon
 import abaqus
-from abaqus import session
 from abaqusConstants import *
 import customKernel # for registered list of userViews
 import os
@@ -160,9 +159,9 @@ def savePlotStateOptions(xmlElement, odbDisplay):   # {{{2
     if len(plotState) > 1:
         saveObject(ET.SubElement(xmlElement, 'superimposeOptions'), odbDisplay.superimposeOptions)
 
-def saveUserSpectrum(xmlElement, session):  # {{{2
+def saveUserSpectrum(xmlElement, sessionObject):  # {{{2
     """Store any custom color spectrum"""
-    for spectrum in session.spectrums.values():
+    for spectrum in sessionObject.spectrums.values():
         if spectrum.type == USER_DEFINED:
             xmlSpectrum = ET.SubElement(xmlElement, 'Spectrum')
             xmlSpectrum.set('name', spectrum.name)
@@ -279,7 +278,7 @@ def saveObject(xmlElement, abaqusObject):  # {{{2
 
 def saveCurrentState(userView, abaqusObjects):  # {{{2
     """Main method called to record everything to an xml userView"""
-    saveObject(userView, session)  # save some session data
+    saveObject(userView, abaqus.session)  # save some session data
     for abaqusObject in abaqusObjects:
         if isinstance(abaqusObject, abaqus.ViewportType):
             if hasattr(abaqusObject.odbDisplay, 'name'):
@@ -444,7 +443,7 @@ def restoreView(viewId):    # {{{2 Restore the specified xml userview Id
         datestr = iso8601.time.strftime('%Y-%m-%d %H:%M', localtime)
     print(xmlView.get('name'), datestr)
     for spectrum in xmlView.findall('Spectrum'):
-        restoreObject(spectrum, session.Spectrum)
+        restoreObject(spectrum, abaqus.session.Spectrum)
     vps = xmlView.findall('Viewport')
     vpObject = list(abaqus.session.viewports.values())[0]  # current viewport
     if len(vps) > 1:
