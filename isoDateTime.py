@@ -7,7 +7,16 @@ import datetime
 __version__ = '0.2'
 
 class tzUTC(datetime.tzinfo):
-    """UTC"""
+    """UTC tzinfo
+
+    >>> secs = 1300901610.5
+    >>> parsed = datetime.datetime.fromtimestamp(secs, UTC)
+    >>> print(parsed)
+    2011-03-23 17:33:30.500000+00:00
+    >>> parsed.isoformat()
+    '2011-03-23T17:33:30.500000+00:00'
+    """
+
     def utcoffset(self, dt):
         return datetime.timedelta(0)
     def tzname(self, dt):
@@ -16,7 +25,18 @@ class tzUTC(datetime.tzinfo):
         return datetime.timedelta(0)
 
 class tzLocal(datetime.tzinfo):
-    """First attempt at something that might make sense"""
+    """First attempt at something that might make sense
+
+    >>> secs = 1300901610.5
+    >>> parsed = datetime.datetime.fromtimestamp(secs, UTC)
+    >>> print(parsed)
+    2011-03-23 17:33:30.500000+00:00
+    >>> parsed.isoformat()
+    '2011-03-23T17:33:30.500000+00:00'
+    >>> parsed.astimezone(local).isoformat()
+    '2011-03-23T13:33:30.500000-04:00'
+    """
+
     def __init__(self):
         if hasattr(time, 'tzset'):
             time.tzset()    # Reset the time conversion rules based on TZ
@@ -53,7 +73,12 @@ UTC = tzUTC()
 local = tzLocal()
 
 def tostring(sometime):
-    """Return UTC iso8601 format"""
+    """Return UTC iso8601 format
+
+    >>> secs = parse("2011-03-23T17:33:30.50Z")
+    >>> tostring(secs)
+    '2011-03-23T17:33:30Z'
+    """
 
     isofmt = "%Y-%m-%dT%H:%M:%SZ"
     if isinstance(sometime, datetime.datetime):
@@ -66,7 +91,11 @@ def tostring(sometime):
 
 
 def parse(datestring):
-    """Return seconds since epoch, assuming iso8601 datestring is UTC"""
+    """Return seconds since epoch, assuming iso8601 datestring is UTC
+
+    >>> parse("2011-03-23T17:33:30.50Z")
+    1300901610.5
+    """
 
     import re
     import calendar
@@ -85,6 +114,9 @@ def parse(datestring):
 
 
 if __name__ == '__main__':
+    import doctest
+    doctest.testmod()
+
     isofmt="%Y-%m-%dT%H:%M:%S%Z"
     example = "2011-03-23T17:33:30.50Z"
 
