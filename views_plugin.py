@@ -3,7 +3,7 @@
 from abaqusGui import *
 from viewEditDB import viewEditForm
 from viewportEditDB import viewportEditForm
-from viewManagerDB import viewManagerForm
+from viewManagerDB import ViewManagerForm
 import viewsCommon
 
 # {{{1 Procedure definition
@@ -118,7 +118,7 @@ toolset.registerGuiMenuButton(
 
 toolset.registerGuiMenuButton(
         buttonText='|'.join(menu) + '|Printed view &Manager...',
-        object=viewManagerForm(toolset),
+        object=ViewManagerForm(toolset),
         kernelInitString='import viewSave; viewSave.init()',
         author='Carl Osterwisch',
         version=viewsCommon.__version__,

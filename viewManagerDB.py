@@ -5,6 +5,7 @@ Carl Osterwisch, June 2006
 
 import re
 from abaqusGui import *
+from viewsCommon import ViewRow, databaseName
 
 class myQuery:
     "Object used to register/unregister Queries"
@@ -24,10 +25,10 @@ class myAFXTable(AFXTable):
     def deleteRows(self, startRow, numRows=1, notify=FALSE):
         " Notify the kernel that these views are no longer wanted. "
         if notify:
-            ids = [ self.getItemValue(row, 0) 
+            names = [ self.getItemValue(row, ViewRow._fields.index('name'))
                     for row in range(startRow, startRow + numRows) ]
             AFXTable.deleteRows(self, startRow, numRows, notify)
-            sendCommand("viewSave.deleteViews(%r)"%ids)
+            sendCommand("viewSave.deleteViews(%r)"%names)
         else:
             AFXTable.deleteRows(self, startRow, numRows, notify)
 
@@ -35,7 +36,7 @@ class myAFXTable(AFXTable):
 ###########################################################################
 # Dialog box
 ###########################################################################
-class viewManagerDB(AFXDataDialog):
+class ViewManagerDB(AFXDataDialog):
     """The view manager dialog box class
 
     viewsForm will create an instance of this class when the user requests it.
@@ -44,12 +45,11 @@ class viewManagerDB(AFXDataDialog):
     (
         ID_TABLE,
         ID_FILTER,
-        ID_NEWVIEW,
-        ID_DELVIEW,
         ID_BUTTON_ANNOTATION,
-        ID_BUTTON_FILE,
+        ID_SELECT_FILE,
+        ID_FILE_CHANGED,
         ID_LAST
-    ) = range(AFXDataDialog.ID_LAST, AFXDataDialog.ID_LAST + 7)
+    ) = range(AFXDataDialog.ID_LAST, AFXDataDialog.ID_LAST + 6)
 
 
     def __init__(self, form):
@@ -58,73 +58,82 @@ class viewManagerDB(AFXDataDialog):
                 mode=form,
                 title="Printed Views Manager",
                 opts=DIALOG_NORMAL|DECOR_RESIZE)
+        self.fileDialog = None
+        self.form = form
+        self.filter = ''  # Don't filter anything
 
-        mainframe = FXVerticalFrame(self, FRAME_SUNKEN | LAYOUT_FILL_X | LAYOUT_FILL_Y)
+
+    def create(self):
+        """Make the widgets"""
+        self.mainframe = FXVerticalFrame(self, FRAME_SUNKEN | LAYOUT_FILL_X | LAYOUT_FILL_Y)
+        frame = FXHorizontalFrame(p=self.mainframe, opts=LAYOUT_FILL_X)
+        AFXTextField(
+                p=frame,
+                ncols=12,
+                labelText='Database:\tSaved views database file',
+                tgt=self.form.databaseKw,
+                opts=AFXTEXTFIELD_STRING|AFXTEXTFIELD_READONLY|LAYOUT_CENTER_Y|LAYOUT_FILL_X)
+        #self.form.databaseKw.setTarget(self)
+        #self.form.databaseKw.setSelector(self.ID_FILE_CHANGED)
+        icon = afxGetIcon('fileOpen')
+        FXButton(p=frame, text='\tSelect view database file...', ic=icon,
+                tgt=self, sel=self.ID_SELECT_FILE,
+                opts=BUTTON_TOOLBAR | FRAME_RAISED | LAYOUT_RIGHT)
+        FXMAPFUNC(self, SEL_COMMAND, self.ID_SELECT_FILE, ViewManagerDB.selectDatabaseFile)
+        FXMAPFUNC(self, SEL_COMMAND, self.ID_FILE_CHANGED, ViewManagerDB.onFileChanged)
 
         self.table = myAFXTable(
-                p=mainframe,
+                p=self.mainframe,
                 numVisRows=4,
-                numVisColumns=4,
+                numVisColumns=3,
                 numRows=1,
-                numColumns=5,
+                numColumns=len(ViewRow._fields),
                 tgt=self,
                 sel=self.ID_TABLE,
                 opts=AFXTABLE_NORMAL|AFXTABLE_ROW_MODE)
 #                    AFXTABLE_BROWSE_SELECT|AFXTABLE_ROW_MODE)
-        FXMAPFUNC(self, SEL_CLICKED, self.ID_TABLE, viewManagerDB.onTable)
-        FXMAPFUNC(self, SEL_COMMAND, self.ID_TABLE, viewManagerDB.onCommand)
+        FXMAPFUNC(self, SEL_CLICKED, self.ID_TABLE, ViewManagerDB.onTable)
+        FXMAPFUNC(self, SEL_COMMAND, self.ID_TABLE, ViewManagerDB.onCommand)
         self.table.setLeadingRows(numRows=1)
-        self.table.setLeadingRowLabels('Id\tName\tDate\tOdbName\tA')
+        self.table.setLeadingRowLabels('\t'.join([f.title() for f in ViewRow._fields]))
         self.table.setColumnWidth(0, 0) # Don't show id column
-        self.table.setColumnWidth(4, 15) # Small column for annotation indicator
-        self.table.setColumnEditable(1, 1) # Allow name edit
-        self.table.setStretchableColumn(3) # Expand OdbName as necessary
+        self.table.setColumnEditable(ViewRow._fields.index('comment'), True)
+        self.table.setStretchableColumn(ViewRow._fields.index('comment')) # Expand Comment as necessary
 
-        for col in range(self.table.getNumColumns()):
-            self.table.setColumnSortable(col, TRUE) # All are sortable
-        self.table.setCurrentSortColumn(2) # date
+        for col in range(1, self.table.getNumColumns()):
+            self.table.setColumnSortable(col, TRUE)
+        self.table.setCurrentSortColumn(ViewRow._fields.index('date'))
 
         self.table.setPopupOptions(
-                AFXTable.POPUP_DELETE_ROW
-                |AFXTable.POPUP_FILE)
+                AFXTable.POPUP_DELETE_ROW) # | AFXTable.POPUP_FILE)
 
-        self.filter = ''  # Don't filter anything
-        AFXTextField(p=mainframe,
+        AFXTextField(p=self.mainframe,
                 ncols=15,
                 labelText='Regular expression filter:',
                 tgt=self,
                 sel=self.ID_FILTER,
                 opts=LAYOUT_FILL_X)
-        FXMAPFUNC(self, SEL_COMMAND, self.ID_FILTER, viewManagerDB.onFilter)
+        FXMAPFUNC(self, SEL_COMMAND, self.ID_FILTER, ViewManagerDB.onFilter)
 
-        self.appendActionButton(text="File...", tgt=self, sel=self.ID_BUTTON_FILE)
-        FXMAPFUNC(self, SEL_COMMAND, self.ID_BUTTON_FILE, viewManagerDB.onButtonFile)
         btn = self.appendActionButton(self.APPLY)
         btn.setText("Restore View")
         self.appendActionButton(text="Restore Annotations", tgt=self, sel=self.ID_BUTTON_ANNOTATION)
-        FXMAPFUNC(self, SEL_COMMAND, self.ID_BUTTON_ANNOTATION, viewManagerDB.onAnnotation)
+        FXMAPFUNC(self, SEL_COMMAND, self.ID_BUTTON_ANNOTATION, ViewManagerDB.onAnnotation)
         self.appendActionButton(self.DISMISS)
-
-        self.fileDialog = AFXFileDialog(
-                owner=self,
-                title="Select userView database",
-                pathNameTgt=form.fntarget,
-                tgt=form,
-                sel=form.ID_FNTARGET,
-                #mode=AFXSELECTFILE_EXISTING,
-                readOnlyKw=None,
-                patterns="*.xml\nAll Files (*)")
+        AFXDataDialog.create(self)
         
 
     def updateTable(self):
         "Read view settings from customData.userViews registered list"
+        print('updateTable')
         sortColumn = self.table.getCurrentSortColumn()
 
         # Collect filtered table data
         filtered = []
         filterre = re.compile(self.filter, re.IGNORECASE)
         for row in session.customData.userViews:
-            if filterre.search(' '.join(row)):
+            row = ViewRow(*row)  # force to ViewRow
+            if filterre.search(' '.join(row[1:])):
                 filtered.append( (row[sortColumn].lower(), row) )
 
         # Sort table data
@@ -146,18 +155,18 @@ class viewManagerDB(AFXDataDialog):
                     notify=FALSE)
 
         # Update table widget
-        selected = self.getMode().viewId.getValue()
-        for row, (key, rowtext) in enumerate(filtered):
-            tableRow = row + 1
-            if rowtext[0] == selected:
+        selected = self.form.viewNameKw.getValue()
+        for i, (_, row) in enumerate(filtered):
+            tableRow = i + 1
+            if row.name == selected:
                 selected = tableRow
             self.table.deselectRow(tableRow)
-            for col, itemtext in enumerate(rowtext):
+            for col, itemtext in enumerate(row):
                 # TODO make icon for annotation column
                 self.table.setItemValue(
                         row=tableRow,
                         column=col,
-                        valueText=itemtext)
+                        valueText=str(itemtext))
 
         if isinstance(selected, int):
             self.table.selectRow(selected)
@@ -168,9 +177,9 @@ class viewManagerDB(AFXDataDialog):
         " Called for rename "
         row = self.table.getCurrentRow()
         if row > 0:
-            id = sender.getItemValue(row, 0)
-            name = sender.getItemValue(row, 1)
-            sendCommand("viewSave.renameView(viewId=%r, name=%r)"%(id, name))
+            name = sender.getItemValue(row, ViewRow._fields.index('name'))
+            comment = sender.getItemValue(row, ViewRow._fields.index('comment'))
+            sendCommand("viewSave.addComment(viewName=%r, comment=%r)"%(name, comment))
         return 0
 
 
@@ -178,8 +187,8 @@ class viewManagerDB(AFXDataDialog):
         "Table was clicked - update the keyword or sorting"
         row = sender.getCurrentRow()
         if row > 0:
-            id = sender.getItemValue(row, 0)
-            self.getMode().viewId.setValue(id)
+            name = sender.getItemValue(row, ViewRow._fields.index('name'))
+            self.getMode().viewNameKw.setValue(name)
         if row == 0:
             self.updateTable()  # sorting has changed
         return 0
@@ -194,16 +203,28 @@ class viewManagerDB(AFXDataDialog):
 
     def onAnnotation(self, sender, sel, ptr):
         "Annotation button was pushed"
-        selected = self.getMode().viewId.getValue()
-        sendCommand("viewSave.restoreAnnotations(viewId=%r)"%selected)
-        return 0
+        selected = self.getMode().viewNameKw.getValue()
+        sendCommand("viewSave.restoreAnnotations(viewName=%r)"%selected)
 
 
-    def onButtonFile(self, sender, sel, ptr):
-        "Display the file selector dialog box"
-        self.fileDialog.create()
+    def selectDatabaseFile(self, sender, sel, ptr):
+        """Construct database file selection dialog"""
+        if not self.fileDialog:
+            self.fileDialog = AFXFileSelectorDialog(self.mainframe,
+                    'Select userView database file', # title
+                    self.form.databaseKw, # pathNameKw
+                    None, # readOnlyKw
+                    AFXSELECTFILE_EXISTING, # mode
+                    'View database (*.zip)', # pattern
+                    )
+            self.fileDialog.create()
         self.fileDialog.showModal()
-        return 0
+
+
+    def onFileChanged(self, sender, sel, ptr):
+        """A new database file was selected"""
+        sendCommand('viewSave.scanDatabase({:r})'.format(self.form.databaseKw.getValue()))
+        return 1
 
 
     def show(self):
@@ -211,49 +232,40 @@ class viewManagerDB(AFXDataDialog):
         # Register query and populate the table
         self.userViewsQuery = \
                 myQuery(session.customData.userViews, self.updateTable)
-        self.updateTable()
         return AFXDataDialog.show(self)
 
 
     def hide(self):
         "Called to remove the dialog box"
         del self.userViewsQuery
-        sendCommand("viewSave.writeXmlFile()")
         return AFXDataDialog.hide(self)
 
 
 ###########################################################################
 # Form definition
 ###########################################################################
-class viewManagerForm(AFXForm):
+class ViewManagerForm(AFXForm):
     "Class to launch the views GUI"
-    (
-        ID_FNTARGET,
-        ID_LAST,
-    ) = range(AFXDataDialog.ID_LAST, AFXDataDialog.ID_LAST + 2)
 
     def __init__(self, owner):
 
         AFXForm.__init__(self, owner) # Construct the base class.
                 
         # Commands.
+        scanDatabase = AFXGuiCommand(mode=self, method='scanDatabase', objectName='viewSave')
         restoreView = AFXGuiCommand(mode=self, method='restoreView', objectName='viewSave')
-        self.viewId = AFXStringKeyword(command=restoreView,
-                name='viewId',
+        self.databaseKw = AFXStringKeyword(command=scanDatabase,
+                name='fileName',
+                isRequired=TRUE,
+                defaultValue=databaseName)
+
+        self.viewNameKw = AFXStringKeyword(command=restoreView,
+                name='viewName',
                 isRequired=TRUE,
                 defaultValue='0')
 
-        self.fntarget = AFXStringTarget()
-        FXMAPFUNC(self, SEL_COMMAND, self.ID_FNTARGET, viewManagerForm.onFileChanged)
-
 
     def getFirstDialog(self):
-        return viewManagerDB(self)
+        return ViewManagerDB(self)
 
-
-    def onFileChanged(self, sender, sel, ptr):
-        " Message handler for AFXFileDialog "
-        if sender.getPressedButtonId() == sender.ID_CLICKED_OK:
-            sendCommand("viewSave.readXmlFile(fileName=%r)"%self.fntarget.getValue())
-        return 0
 

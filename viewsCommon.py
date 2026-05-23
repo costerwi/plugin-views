@@ -2,6 +2,10 @@
 
 """
 
+from collections import namedtuple
+
 __version__ = '1.0.0'
 helpUrl='https://github.com/costerwi/plugin-views'
-xmlFileName = 'userViews.xml'
+
+databaseName = 'userViews.zip'
+ViewRow = namedtuple('ViewRow', ['id', 'name', 'date', 'odb', 'step', 'comment'], defaults=['', ''])

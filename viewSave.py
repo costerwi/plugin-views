@@ -1,23 +1,29 @@
 # $Id$ vim: set modeline foldmethod=marker:
 
-from __future__ import print_function
+from collections import namedtuple
+from datetime import datetime
+import os
+import sys
+import xml.etree.ElementTree as ET
+from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED
 import viewsCommon
 import abaqus
 from abaqusConstants import *
 import customKernel # for registered list of userViews
-import os
-import sys
-import xml.etree.ElementTree as ET
-try:
-    from xml.utils import iso8601 # date/time support
-except ImportError:
-    import isoDateTime as iso8601
 
 xmldoc = None
-xmlFileName = None
+databaseName = None
+Extra = namedtuple('Extra', ['odb', 'step', 'comment'], defaults=['', '', ''])
 debug = os.environ.get('DEBUG')
 
 # {{{1 Utility functions ######################################################
+
+if not hasattr(customKernel.RegisteredList, "clear"):
+    def clear(self):
+        while len(self) > 0:
+            self.pop(0)
+    customKernel.RegisteredList.clear = clear
+
 
 def encode(value=0, chars="abcdefghijklmnopqrstuvwxyz"):  # {{{2
     "Return the int value encoded into arbitrary base defined by chars."
@@ -115,6 +121,16 @@ def saveActiveViewCut(xmlElement, abaqusObject): # {{{2
         vc.text = 'ON'
     else:
         vc.text = 'OFF'
+
+
+def saveOdbMeta(xmlElement, odbDisplay):   # {{{2
+    """Add metadata attributes to odbDisplay element"""
+    xmlElement.set('name', os.path.basename(odbDisplay.name))
+    stepName = odbDisplay.fieldFrame[0]
+    if isinstance(stepName, int):
+        odb = abaqus.session.odbs[odbDisplay.name]
+        stepName = odb.steps.keys()[stepName]
+    xmlElement.set('step', stepName)
 
 
 def savePlotStateOptions(xmlElement, odbDisplay):   # {{{2
@@ -219,7 +235,7 @@ knownObjects = {    # {{{2 What to save from each element type
     'View': ['projection',
         'cameraTarget', 'cameraPosition', 'cameraUpVector',
         'width', 'viewOffsetX', 'viewOffsetY'],
-    'OdbDisplay': ['name', 'display', savePlotStateOptions, 'basicOptions', 'commonOptions',
+    'OdbDisplay': [saveOdbMeta, 'display', savePlotStateOptions, 'basicOptions', 'commonOptions',
         'viewCutOptions', saveActiveViewCut ],
     'ViewCut': [ 'name', saveViewCut ],
     'float' : [],
@@ -308,7 +324,7 @@ def addSessionUserView(xmlView):    # {{{2 Update customData.userViews for the G
     for od in xmlView.findall("./Viewport/odbDisplay"):
         odbName = str(od.get('name'))
         abaqus.session.customData.userViews.append(
-                (id, name, datestr, odbName, ud) )
+                (name, datestr, odbName, ud) )
 
 
 # {{{1 Functions to restore a view from the database ##########################
@@ -365,46 +381,35 @@ def restoreObject(xmlElement, abaqusObject):
 
 # {{{1 File access functions ##################################################
 
-def readXmlFile(fileName):  # {{{2
-    "Read fileName into xmldoc or create a new xmldoc if necessary"
-    global xmldoc, xmlFileName
-    if os.path.exists(fileName):
-        with open(fileName) as file:
-            doc = myElementTree(file=file)
-    else:
-        # Create a new document
-        doc = myElementTree(ET.Element("userViews"))
-        doc.changed = 1
-    fileType = doc.getroot().tag
-    if not "userViews" == fileType:
-        return abaqus.getWarningReply(
-                '%r is not userViews file format'%fileType,
-                (abaqus.CANCEL, ))
-    writeXmlFile()  # save any updates to the old document
-    xmldoc = doc
-    xmlFileName = fileName
-    # Clear the old list items (if any)
-    while len(abaqus.session.customData.userViews) > 0:
-        del abaqus.session.customData.userViews[0]
-    # Add new views
-    for view in xmldoc.getroot().findall("userView"):
-        if debug:
-            print('view', view.get('name'))
-        addSessionUserView(view)
+def addUserViews(infolist):  # {{{2
+    """Add rows to customData.userViews"""
+    rows = []
+    for i, info in enumerate(infolist, len(abaqus.session.customData.userViews)):
+        name, ext = os.path.splitext(info.filename)
+        if ext != '.xml':
+            continue
+        extra = Extra(*((info.comment or b';;').decode().split(';', 2)))
+        rows.append( viewsCommon.ViewRow(
+            i,
+            name,
+            "{}-{:02}-{:02} {:02}:{:02}:{:02}".format(*info.date_time),
+            extra.odb,
+            extra.step,
+            extra.comment,
+            ) )
+    abaqus.session.customData.userViews.extend(rows)
 
 
-def writeXmlFile(fileName=None): # {{{2
-    "Save the xml document to fileName"
-    if not hasattr(xmldoc, 'changed'):
-        return
-    if not fileName:
-        fileName=xmlFileName
-    bkupName = fileName + '~'
-    xmldoc.write(bkupName)
-    if os.path.exists(fileName):
-        os.remove(fileName)
-    os.rename(bkupName, fileName)
-    delattr(xmldoc, 'changed')
+def scanDatabase(fileName):  # {{{2
+    "Read existing database entries into userViews"
+    global databaseName
+    databaseName = fileName
+    abaqus.session.customData.userViews.clear()
+    try:
+        with ZipFile(fileName) as database:
+            addUserViews(database.infolist())
+    except FileNotFoundError:
+        pass
 
 
 # {{{1 Abaqus/Viewer plugin functions #########################################
@@ -412,43 +417,52 @@ def writeXmlFile(fileName=None): # {{{2
 def printToFileCallback(callingObject, args, kws, user):    # {{{2
     "Add a new userView to the xml document"
 
-    userView = ET.SubElement(xmldoc.getroot(), 'userView')
-    userView.set('name', kws['fileName'])
+    userView = ET.Element('userView')
     userView.set('abaqusViewer',
             '%s.%s-%s'%(abaqus.majorVersion, abaqus.minorVersion,
                 abaqus.updateVersion))
-    now = iso8601.time.time()
-    userView.set('dateTime', iso8601.tostring(now))
     userView.set('version', str(viewsCommon.__version__))
-    xmldoc.assignUniqueId(userView)
     saveCurrentState(userView, kws['canvasObjects'])
-    addSessionUserView(userView) # pass to gui
-    xmldoc.changed = 1
-    writeXmlFile()
+
+    name = kws['fileName']
+    extra = Extra()
+    odbDisplay = userView.find('Viewport/odbDisplay')
+    if odbDisplay is not None:
+        extra = extra._replace(odb=os.path.basename(odbDisplay.get('name', '')))
+        extra = extra._replace(step=odbDisplay.get('step', ''))
+        primary = odbDisplay.find('setPrimaryVariable/variableLabel')
+        if primary is not None:
+            extra = extra._replace(comment=primary.text)
+
+    now = datetime.now()
+    info = ZipInfo(name + '.xml', now.timetuple()[:6])
+    info.compress_type = ZIP_DEFLATED
+
+    info.comment = ';'.join(extra).encode()  # must be bytes
+
+    if any([name == row[1] for row in abaqus.session.customData.userViews]):
+        deleteViews([name])
+
+    with ZipFile(databaseName, mode='a') as database:
+        database.writestr(info, ET.tostring(userView, encoding='unicode'))
+    addUserViews([info])
 
 
-def restoreView(viewId):    # {{{2 Restore the specified xml userview Id
+def restoreView(viewName):    # {{{2 Restore the specified xml userview Id
     """Retrieve the xmlElement for the identified userView.
 
     Called by viewManagerForm when executing the form command.
     """
-    xmlView = xmldoc.getElementById(viewId)
-    if xmlView is None:
-        print("View %r not in userViews database."%viewId)
-        return
-    datestr = xmlView.get('dateTime')
-    if datestr:
-        dateTime = iso8601.parse(datestr)
-        localtime = iso8601.time.localtime(dateTime)
-        datestr = iso8601.time.strftime('%Y-%m-%d %H:%M', localtime)
-    print(xmlView.get('name'), datestr)
-    for spectrum in xmlView.findall('Spectrum'):
+    with ZipFile(databaseName) as database:
+        with database.open(viewName + '.xml') as entry:
+            userView = ET.fromstring(entry.read().decode())
+    for spectrum in userView.findall('Spectrum'):
         restoreObject(spectrum, abaqus.session.Spectrum)
-    vps = xmlView.findall('Viewport')
+    vps = userView.findall('Viewport')
     vpObject = list(abaqus.session.viewports.values())[0]  # current viewport
     if len(vps) > 1:
         for vpElement in vps:
-            vpname = str(vpElement.get('name'))
+            vpname = vpElement.get('name')
             if vpname in abaqus.session.viewports:
                 vpObject = abaqus.session.viewports[vpname]
             else:
@@ -464,22 +478,15 @@ def restoreView(viewId):    # {{{2 Restore the specified xml userview Id
     else:
         print("No viewports defined.")
 
-def restoreAnnotations(viewId):    # {{{2 Restore annotations from the specified xml userview Id
+def restoreAnnotations(viewName):    # {{{2 Restore annotations from the specified xml userview Id
     """Retrieve the xmlElement for the identified userView.
 
     Called by viewManagerDB to restore saved annotations.
     """
-    xmlView = xmldoc.getElementById(viewId)
-    if not xmlView:
-        print("View %r not in userViews database."%viewId)
-        return
-    datestr = xmlView.get('dateTime')
-    if datestr:
-        dateTime = iso8601.parse(datestr)
-        localtime = iso8601.time.localtime(dateTime)
-        datestr = iso8601.time.strftime('%Y-%m-%d %H:%M', localtime)
-    print(xmlView.get('name'), datestr)
-    xmlUserData = xmlView.find('./Odb/userData')
+    with ZipFile(databaseName) as database:
+        with database.open(viewName + '.xml') as entry:
+            userView = ET.fromstring(entry.read().decode())
+    xmlUserData = userView.find('./Odb/userData')
     if xmlUserData is None:
         print("View does not contain annotations.")
         return
@@ -492,32 +499,65 @@ def restoreAnnotations(viewId):    # {{{2 Restore annotations from the specified
 
 def deleteViews(viewIds):   # {{{2 Delete a userview from the database
     "Remove the specified views from the database."
-    userViews = xmldoc.getroot()
-    for viewId in viewIds:
-        userView = xmldoc.getElementById(viewId)
-        userViews.remove(userView)
-        del xmldoc.ids[viewId]
-        xmldoc.changed = 1
-    for view in reversed(abaqus.session.customData.userViews):
-        if view[0] in viewIds:
-            abaqus.session.customData.userViews.remove(view)
-    writeXmlFile()
+    removedRowNumbers = []
+    try:
+        with ZipFile(databaseName, 'r') as source_zip, ZipFile(databaseName + '~', 'w') as dest_zip:
+            for i, info in enumerate(source_zip.infolist()): # Iterate over each file in zip
+                base, _ = os.path.splitext(info.filename)
+                if base in viewIds:
+                    removedRowNumbers.append(i)
+                    continue  # skip
+                dest_zip.writestr(info, source_zip.read(info))
+            dest_zip.comment = source_zip.comment # Copy the comment if available
+        os.replace(dest_zip.filename, source_zip.filename)  # python3
+    except:
+        # something went wrong
+        os.unlink(dest_zip.filename)
+        raise
+    for i in sorted(removedRowNumbers, reverse=True):
+        abaqus.session.customData.userViews.pop(i)
 
-def renameView(viewId, name):   # {{{2 Rename a userview
-    "Modify the view name in the database."
-    xmlView = xmldoc.getElementById(viewId)
-    if xmlView is None:
-        print("View %r not in userViews database."%viewId)
-    else:
-        xmlView.set('name', name)
-        views = abaqus.session.customData.userViews
-        for rownum, row in enumerate(views):
-            if row[0] == viewId:
-                copy = list(row)
-                copy[1] = name
-                views[rownum] = tuple(copy)
-        xmldoc.changed = 1
-    writeXmlFile()
+
+def addComment(viewName, comment):
+    """Set the comment for a view"""
+    try:
+        with ZipFile(databaseName, 'r') as source_zip, ZipFile(databaseName + '~', 'w') as dest_zip:
+            for row, info in zip(abaqus.session.customData.userViews, source_zip.infolist()): # Iterate over each file in zip
+                base, _ = os.path.splitext(info.filename)
+                assert row[0] == base
+                if base == viewName:  # must match base
+                    info.comment = comment.encode()
+                    row[2] = comment
+                dest_zip.writestr(info, source_zip.read(info))
+            dest_zip.comment = source_zip.comment # Copy the ZipFile.comment if available
+        os.replace(dest_zip.filename, source_zip.filename)  # python3
+    except:
+        # something went wrong
+        os.unlink(dest_zip.filename)
+        raise
+
+
+def renameView(viewName, newName):   # {{{2 Rename a userview
+    """Modify the view name in the database."""
+    if viewName == newName:
+        return
+    infolist = []
+    try:
+        with ZipFile(databaseName, 'r') as source_zip, ZipFile(databaseName + '~', 'w') as dest_zip:
+            for info in source_zip.infolist(): # Iterate over each file in zip
+                base, _ = os.path.splitext(info.filename)
+                if base == viewName:  # must match base
+                    info.filename = info.filename.replace(viewName, newName)
+                dest_zip.writestr(info, source_zip.read(info))
+                infolist.append(info)
+            dest_zip.comment = source_zip.comment # Copy the comment if available
+        os.replace(dest_zip.filename, source_zip.filename)  # python3
+    except:
+        # something went wrong
+        os.unlink(dest_zip.filename)
+        raise
+    abaqus.session.customData.userViews.clear()
+    addUserViews(infolist())
 
 
 def init(): # {{{2
@@ -533,6 +573,6 @@ def init(): # {{{2
         print(__name__, 'addCallback printToFile')
         methodCallback.addCallback(type(abaqus.session), 'printToFile',
                 printToFileCallback)
-    readXmlFile(viewsCommon.xmlFileName)
+    scanDatabase(viewsCommon.databaseName)
 
 
