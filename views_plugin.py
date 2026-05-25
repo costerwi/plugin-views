@@ -117,7 +117,7 @@ toolset.registerGuiMenuButton(
         )
 
 toolset.registerGuiMenuButton(
-        buttonText='|'.join(menu) + '|Printed view &Manager...',
+        buttonText='|'.join(menu) + '|View &Manager...',
         object=ViewManagerForm(toolset),
         kernelInitString='import viewSave; viewSave.init()',
         author='Carl Osterwisch',

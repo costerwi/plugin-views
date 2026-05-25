@@ -7,5 +7,6 @@ from collections import namedtuple
 __version__ = '1.0.0'
 helpUrl='https://github.com/costerwi/plugin-views'
 
-databaseName = 'userViews.zip'
-ViewRow = namedtuple('ViewRow', ['id', 'name', 'date', 'odb', 'step', 'comment'], defaults=['', ''])
+databaseName = 'printedViews.zip'
+ViewRow = namedtuple('ViewRow', ['name', 'date', 'odb', 'step', 'comment'],
+        defaults=['', '', ''])

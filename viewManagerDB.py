@@ -56,11 +56,12 @@ class ViewManagerDB(AFXDataDialog):
         # Construct the base class.
         AFXDataDialog.__init__(self,
                 mode=form,
-                title="Printed Views Manager",
+                title="Views Manager",
                 opts=DIALOG_NORMAL|DECOR_RESIZE)
         self.fileDialog = None
         self.form = form
         self.filter = ''  # Don't filter anything
+        self.viewNames = []
 
 
     def create(self):
@@ -96,16 +97,17 @@ class ViewManagerDB(AFXDataDialog):
         FXMAPFUNC(self, SEL_COMMAND, self.ID_TABLE, ViewManagerDB.onCommand)
         self.table.setLeadingRows(numRows=1)
         self.table.setLeadingRowLabels('\t'.join([f.title() for f in ViewRow._fields]))
-        self.table.setColumnWidth(0, 0) # Don't show id column
+        self.table.setColumnEditable(ViewRow._fields.index('name'), True)
         self.table.setColumnEditable(ViewRow._fields.index('comment'), True)
         self.table.setStretchableColumn(ViewRow._fields.index('comment')) # Expand Comment as necessary
 
-        for col in range(1, self.table.getNumColumns()):
+        for col in range(self.table.getNumColumns()):
             self.table.setColumnSortable(col, TRUE)
         self.table.setCurrentSortColumn(ViewRow._fields.index('date'))
 
         self.table.setPopupOptions(
                 AFXTable.POPUP_DELETE_ROW) # | AFXTable.POPUP_FILE)
+        #self.table.appendClientPopupItem('After')
 
         AFXTextField(p=self.mainframe,
                 ncols=15,
@@ -125,15 +127,14 @@ class ViewManagerDB(AFXDataDialog):
 
     def updateTable(self):
         "Read view settings from customData.userViews registered list"
-        print('updateTable')
         sortColumn = self.table.getCurrentSortColumn()
 
         # Collect filtered table data
         filtered = []
         filterre = re.compile(self.filter, re.IGNORECASE)
         for row in session.customData.userViews:
-            row = ViewRow(*row)  # force to ViewRow
-            if filterre.search(' '.join(row[1:])):
+            row = ViewRow(*row)  # interpret as ViewRow
+            if filterre.search('\t'.join(row)):
                 filtered.append( (row[sortColumn].lower(), row) )
 
         # Sort table data
@@ -167,6 +168,7 @@ class ViewManagerDB(AFXDataDialog):
                         row=tableRow,
                         column=col,
                         valueText=str(itemtext))
+        self.viewNames = [row.name for _, row in filtered]
 
         if isinstance(selected, int):
             self.table.selectRow(selected)
@@ -175,30 +177,32 @@ class ViewManagerDB(AFXDataDialog):
 
     def onCommand(self, sender, sel, ptr):
         " Called for rename "
-        row = self.table.getCurrentRow()
-        if row > 0:
-            name = sender.getItemValue(row, ViewRow._fields.index('name'))
-            comment = sender.getItemValue(row, ViewRow._fields.index('comment'))
-            sendCommand("viewSave.addComment(viewName=%r, comment=%r)"%(name, comment))
-        return 0
+        tableRow = self.table.getCurrentRow()
+        if tableRow > 0:
+            viewName = self.viewNames[tableRow - 1]
+            col = self.table.getCurrentColumn()
+            field = ViewRow._fields[col]
+            value = sender.getItemValue(tableRow, col)
+            if field == 'name':
+                sendCommand("viewSave.renameView(viewName=%r, newName=%r)"%(viewName, value))
+            elif field == 'comment':
+                sendCommand("viewSave.setComment(viewName=%r, comment=%r)"%(viewName, value))
 
 
     def onTable(self, sender, sel, ptr):
         "Table was clicked - update the keyword or sorting"
-        row = sender.getCurrentRow()
-        if row > 0:
-            name = sender.getItemValue(row, ViewRow._fields.index('name'))
-            self.getMode().viewNameKw.setValue(name)
-        if row == 0:
+        tableRow = sender.getCurrentRow()
+        if tableRow > 0:
+            viewName = self.viewNames[tableRow - 1]
+            self.getMode().viewNameKw.setValue(viewName)
+        if tableRow == 0:
             self.updateTable()  # sorting has changed
-        return 0
  
 
     def onFilter(self, sender, sel, ptr):
         "Search field was changed"
         self.filter = sender.getText()
         self.updateTable()
-        return 0
 
 
     def onAnnotation(self, sender, sel, ptr):
@@ -252,17 +256,18 @@ class ViewManagerForm(AFXForm):
         AFXForm.__init__(self, owner) # Construct the base class.
                 
         # Commands.
-        scanDatabase = AFXGuiCommand(mode=self, method='scanDatabase', objectName='viewSave')
+        #scanDatabase = AFXGuiCommand(mode=self, method='scanDatabase', objectName='viewSave')
         restoreView = AFXGuiCommand(mode=self, method='restoreView', objectName='viewSave')
-        self.databaseKw = AFXStringKeyword(command=scanDatabase,
-                name='fileName',
-                isRequired=TRUE,
-                defaultValue=databaseName)
 
         self.viewNameKw = AFXStringKeyword(command=restoreView,
                 name='viewName',
                 isRequired=TRUE,
                 defaultValue='0')
+
+        self.databaseKw = AFXStringKeyword(command=restoreView,
+                name='fileName',
+                isRequired=FALSE,
+                defaultValue=databaseName)
 
 
     def getFirstDialog(self):
