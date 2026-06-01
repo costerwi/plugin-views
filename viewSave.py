@@ -434,7 +434,7 @@ def newView(viewName, viewports):    # {{{2
     with ZipFile(databaseName, mode='a') as database:
         if not database.comment:
             database.comment = 'This is a database of stored view data ' \
-                'for the Abaqus CAE view manager plugin.'.encode()
+                'for the Abaqus CAE View Manager plugin.'.encode()
         database.writestr(info, ET.tostring(userView, encoding='unicode'))
     abaqus.session.customData.userViews.append(formatViewRow(info))
 
@@ -489,85 +489,89 @@ def restoreAnnotations(viewName):    # {{{2 Restore annotations from the specifi
     for ann in userData.annotations.values():    # TODO only plot new annotations
         vpObject.plotAnnotation(ann)
 
-def deleteViews(viewNames):   # {{{2 Delete a userview from the database
+def deleteViews(viewNames):   # {{{2 Delete a list of viewNames from the database
     """Remove the specified view names from the database."""
-    removedRowNumbers = []
+    removeRowNumbers = []
+    for i, row in enumerate(abaqus.session.customData.userViews):
+        if row.name in viewNames:
+            removeRowNumbers.append(i)
+    for i in reversed(removeRowNumbers):
+        abaqus.session.customData.userViews.pop(i)
+    modified = False
     with TemporaryFile() as temp:
         with ZipFile(temp, 'w') as dest_zip, ZipFile(databaseName) as source_zip:
-            for i, info in enumerate(source_zip.infolist()): # Iterate over each file in zip
-                base, _ = os.path.splitext(info.filename)
-                if base in viewNames:
-                    removedRowNumbers.append(i)
+            for info in source_zip.infolist(): # Iterate over each file in zip
+                base, ext = os.path.splitext(info.filename)
+                if base in viewNames and ext == '.xml':
+                    modified = True
                     continue  # do not add to dest_zip
                 dest_zip.writestr(info, source_zip.read(info))
             dest_zip.comment = source_zip.comment # Copy the comment if available
-        if removedRowNumbers:
+        if modified:
             temp.seek(0)
             with open(databaseName, 'wb') as out:
                 out.write(temp.read())
-            for i in sorted(removedRowNumbers, reverse=True):
-                abaqus.session.customData.userViews.pop(i)
+        else:
+            scanDatabase()
+            raise KeyError("viewNames {!r} not found in database".format(viewNames))
 
-def setComment(viewName, comment):  # {{{2
-    """Set the comment for a view"""
-    rowNumber = None
+def setDescription(viewName, description):  # {{{2
+    """Set the description for a view"""
+    for i, row in enumerate(abaqus.session.customData.userViews):
+        if row.name == viewName:
+            oldRow = abaqus.session.customData.userViews.pop(i)
+            abaqus.session.customData.userViews.insert(i, oldRow._replace(description=description))
+            break
+    else:
+        scanDatabase()
+        raise KeyError("viewName {!r} not found in userViews".format(viewName))
     with TemporaryFile() as temp:
         with ZipFile(temp, 'w') as dest_zip, ZipFile(databaseName) as source_zip:
-            for i, (row, info) in enumerate(zip(abaqus.session.customData.userViews, source_zip.infolist())): # Iterate over each file in zip
-                base, _ = os.path.splitext(info.filename)
-                assert row.name == base, "Database of sync {} != {}".format(row.name, base)
-                if base == viewName:  # must match base
-                    extra = ';'.join([row.odb, row.step, comment])
+            for info in source_zip.infolist(): # Iterate over each file in zip
+                base, ext = os.path.splitext(info.filename)
+                if base == viewName and ext == '.xml':  # must match base
+                    extra = '\t'.join([row.odb, row.step, description])
                     info.comment = extra.encode()
                     rowNumber = i
                 dest_zip.writestr(info, source_zip.read(info))
             dest_zip.comment = source_zip.comment # Copy the ZipFile.comment if available
-        if rowNumber is not None:
-            temp.seek(0)
-            with open(databaseName, 'wb') as out:
-                out.write(temp.read())
-            oldRow = abaqus.session.customData.userViews.pop(rowNumber)
-            abaqus.session.customData.userViews.insert(rowNumber, oldRow._replace(comment=comment))
-        else:
-            raise KeyError("viewName=" + repr(viewName) + " not found")
+        temp.seek(0)
+        with open(databaseName, 'wb') as out:
+            out.write(temp.read())
 
 def renameView(viewName, newName):   # {{{2 Rename a userview
     """Modify the view name in the database."""
     if viewName == newName:
         return
-    rowNumber = None
-    removedRowNumbers = []
+    for i, row in enumerate(abaqus.session.customData.userViews):
+        if row.name == viewName:
+            oldRow = abaqus.session.customData.userViews.pop(i)
+            abaqus.session.customData.userViews.insert(i, oldRow._replace(name=newName))
+            break
+    else:
+        scanDatabase()
+        raise KeyError("viewName {!r} not found in userViews".format(viewName))
     with TemporaryFile() as temp:
         with ZipFile(temp, 'w') as dest_zip, ZipFile(databaseName) as source_zip:
-            for i, info in enumerate(source_zip.infolist()): # Iterate over each file in zip
-                base, _ = os.path.splitext(info.filename)
-                if base == viewName:  # must match base
-                    info.filename = info.filename.replace(viewName, newName)
-                    rowNumber = i
-                elif base == newName:
-                    removedRowNumbers.append(i)
-                    continue  # remove existing view with this name
+            for info in source_zip.infolist(): # Iterate over each file in zip
+                base, ext = os.path.splitext(info.filename)
+                if ext == '.xml':
+                    if base == viewName:  # must match base
+                        info.filename = info.filename.replace(viewName, newName)
+                    elif base == newName:
+                        continue  # remove existing view with this name
                 dest_zip.writestr(info, source_zip.read(info))
             dest_zip.comment = source_zip.comment # Copy the comment if available
-        if rowNumber is not None:
-            temp.seek(0)
-            with open(databaseName, 'wb') as out:
-                out.write(temp.read())
-            oldRow = abaqus.session.customData.userViews.pop(rowNumber)
-            assert oldRow.name == viewName, "Out of sync {} != {}".format(oldRow.name, viewName)
-            abaqus.session.customData.userViews.insert(rowNumber, oldRow._replace(name=newName))
-            for i in sorted(removedRowNumbers, reverse=True):
-                oldRow = abaqus.session.customData.userViews.pop(i)
-                assert oldRow.name == newName, "Out of sync {} != {}".format(oldRow.name, newName)
-        else:
-            raise KeyError("viewName={:r} not found".format(viewName))
+        temp.seek(0)
+        with open(databaseName, 'wb') as out:
+            out.write(temp.read())
 
 # {{{1 Initialization functions #########################################
 
-def scanDatabase(fileName):  # {{{2
+def scanDatabase(fileName=None):  # {{{2
     "Read existing database entries into userViews"
     global databaseName
-    databaseName = fileName
+    databaseName = fileName or databaseName
     abaqus.session.customData.userViews.clear()
     newRows = []
     try:
@@ -595,7 +599,7 @@ def init(): # {{{2
     # Add to session.customData
     if not hasattr(abaqus.session.customData, "userViews"):
         abaqus.session.customData.userViews = customKernel.RegisteredList()
-        print("Add views each time you Print to File")
+        print("Views will be added for each Print to File")
         methodCallback.addCallback(type(abaqus.session), 'printToFile',
                 printToFileCallback)
     scanDatabase(viewsCommon.databaseName)
