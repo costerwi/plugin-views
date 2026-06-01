@@ -116,10 +116,13 @@ toolset.registerGuiMenuButton(
         description='Directly edit parameters for the current view.',
         )
 
+kernelInitString='import viewSave; viewSave.init()'
+if not isinstance(u'unicode', str):
+    kernelInitString='print "*** View Manager requires Abaqus CAE version >= 2024"'
 toolset.registerGuiMenuButton(
         buttonText='|'.join(menu) + '|View &Manager...',
         object=ViewManagerForm(toolset),
-        kernelInitString='import viewSave; viewSave.init()',
+        kernelInitString=kernelInitString,
         author='Carl Osterwisch',
         version=viewsCommon.__version__,
         helpUrl=viewsCommon.helpUrl,

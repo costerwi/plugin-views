@@ -123,7 +123,7 @@ class ViewManagerDB(AFXDataDialog):
         FXMAPFUNC(self, SEL_COMMAND, self.ID_BUTTON_ANNOTATION, ViewManagerDB.onAnnotation)
         self.appendActionButton(self.DISMISS)
         AFXDataDialog.create(self)
-        
+
 
     def updateTable(self):
         "Read view settings from customData.userViews registered list"
@@ -132,10 +132,13 @@ class ViewManagerDB(AFXDataDialog):
         # Collect filtered table data
         filtered = []
         filterre = re.compile(self.filter, re.IGNORECASE)
-        for row in session.customData.userViews:
-            row = ViewRow(*row)  # interpret as ViewRow
-            if filterre.search('\t'.join(row)):
-                filtered.append( (row[sortColumn].lower(), row) )
+        try:
+            for row in session.customData.userViews:
+                row = ViewRow(*row)  # interpret as ViewRow
+                if filterre.search('\t'.join(row)):
+                    filtered.append( (row[sortColumn].lower(), row) )
+        except AttributeError:
+            return
 
         # Sort table data
         filtered.sort()
@@ -208,7 +211,8 @@ class ViewManagerDB(AFXDataDialog):
     def onAnnotation(self, sender, sel, ptr):
         "Annotation button was pushed"
         selected = self.getMode().viewNameKw.getValue()
-        sendCommand("viewSave.restoreAnnotations(viewName=%r)"%selected)
+        if selected:
+            sendCommand("viewSave.restoreAnnotations(viewName=%r)"%selected)
 
 
     def selectDatabaseFile(self, sender, sel, ptr):
@@ -227,7 +231,8 @@ class ViewManagerDB(AFXDataDialog):
 
     def onFileChanged(self, sender, sel, ptr):
         """A new database file was selected"""
-        return 1
+        if not hasattr(self, 'userViewsQuery'):
+            return
         filename = self.form.databaseKw.getValue()
         sendCommand('viewSave.scanDatabase("{!r}")'.format(filename))
 
@@ -235,14 +240,18 @@ class ViewManagerDB(AFXDataDialog):
     def show(self):
         "Prepare to show the dialog box"
         # Register query and populate the table
-        self.userViewsQuery = \
+        try:
+            self.userViewsQuery = \
                 myQuery(session.customData.userViews, self.updateTable)
+        except AttributeError:
+            pass
         return AFXDataDialog.show(self)
 
 
     def hide(self):
         "Called to remove the dialog box"
-        del self.userViewsQuery
+        if hasattr(self, 'userViewsQuery'):
+            del self.userViewsQuery
         return AFXDataDialog.hide(self)
 
 
@@ -263,7 +272,7 @@ class ViewManagerForm(AFXForm):
         self.viewNameKw = AFXStringKeyword(command=restoreView,
                 name='viewName',
                 isRequired=TRUE,
-                defaultValue='0')
+                defaultValue='')
 
         self.databaseKw = AFXStringKeyword(command=restoreView,
                 name='fileName',
