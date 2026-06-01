@@ -31,53 +31,100 @@ def saferEval(string):  # {{{2
     assert re.search(r'\w\(', string) == None, "Detected possible method call {!r}".format(string)
     return eval(string)
 
-def encode(value=0, chars="abcdefghijklmnopqrstuvwxyz"):  # {{{2
-    "Return the int value encoded into arbitrary base defined by chars."
-    if not value:
-        return chars[0]
-    base = len(chars)
-    converted = []
-    while(value):
-        value, remainder = divmod(value, base)
-        converted.append(chars[remainder])
-    return ''.join(reversed(converted))
+def intRanges(intList):
+    """Yield ranges of continuous sequences within list of integers
 
+    >>> list(ranges([10,11,12,1,2,3,4,17,18,20]))
+    [(1, 4), (10, 12), (17, 18), (20, 20)]
+    """
 
-class myElementTree(ET.ElementTree):  # {{{2
-    def __init__(self, *args, **kwargs):
-        ET.ElementTree.__init__(self, *args, **kwargs)
-        self.ids = {}
+    sortedInts = sorted(intList)
+    lower = 0 # lower index
+    while lower < len(sortedInts):
+        upper = lower # begin binary search to find upper index
+        boundary = len(sortedInts) # index of too high
+        while boundary > upper + 1:
+            mid = (upper + boundary)//2 # middle index
+            while sortedInts[mid] - sortedInts[upper] > mid - upper:
+                boundary = mid
+                mid = (upper + boundary)//2
+            upper = mid
+        yield sortedInts[lower], sortedInts[upper]
+        lower = upper + 1
 
-    def assignUniqueId(self, xmlElement):
-        """Return a unique id for this xmlElement, creating one if necessary."""
-        import random
-        xmlid = xmlElement.get('id')
-        existing = self.ids.get(xmlid)
-        if existing is not None:
-            if existing == xmlElement:
-                return xmlid
-            # element has an id but it's already in use by another element
-            xmlid = None
-        maxid = max(26, 2*len(self.ids))
-        while xmlid is None or xmlid in self.ids:
-            intid = random.randint(0, maxid)
-            xmlid = encode(intid)
-        xmlElement.set('id', xmlid)
-        self.ids[xmlid] = xmlElement
-        return xmlid
+def intListToString(intList):
+    """Convert list of ints to compact string
 
-    def getElementById(self, id):
-        """Quickly find element by id"""
-        element = self.ids.get(id)
-        if element is None:
-            # initialize the lookup
-            for element in self.findall(".//*[@id]"):
-                self.ids[element.get("id")] = element
-            element = self.ids.get(id)
-        return element
+    >>> intListToString([10,11,12,1,2,3,4,17,18,20])
+    '1:4 10:12 17 18 20'
+    """
 
+    strList = []
+    for lower, upper in intRanges(intList):
+        if lower == upper:
+            strList.append(str(lower))
+        elif lower + 1 == upper:
+            # adjacent ints listed separately
+            strList.append('%d %d'%(lower, upper))
+        else:
+            # range of ints
+            strList.append('%d:%d'%(lower, upper))
+    return ' '.join(strList)
 
-###############################################################################
+def stringToIntList(strList):
+    """Convert string to list of ints
+
+    >>> stringToIntList('1:4 10:12 17 18 20')
+    [1, 2, 3, 4, 10, 11, 12, 17, 18, 20]
+    """
+    intList = []
+    for i in strList.split():
+        if not ':' in i:
+            intList.append(int(i))
+        else:
+            # expand range
+            lower, upper = i.split(':')
+            intList.extend(range(int(lower), int(upper) + 1))
+    return intList
+
+class InstSet(dict):  # {{{2
+    """Class for working with sets defined across multiple instances"""
+    def __init__(self, other):
+        super().__init__()
+        for InstName, value in other.items():
+            self[InstName] = set(value)
+
+    def __len__(self):
+        return sum(len(value) for value in self.values())
+
+    def issubset(self, other):
+        for instName, value in self.items():
+            if not value.issubset(other.get(instName, set())):
+                return False
+        return True
+
+    def __str__(self):
+        s = []
+        for instName, value in self.items():
+            s.append("{} [{}]".format(instName, len(value)))
+        return '\n'.join(s)
+
+    def difference_update(self, other):
+        empty = []
+        for instName, value in self.items():
+            value -= other.get(instName, set())
+            if not(value):
+                empty.append(instName)
+        for instName in empty:
+            del self[instName]
+
+    def union_update(self, other):
+        for instName, value in self.items():
+            value += other.get(instName, set())
+        for instName, value in other.items():
+            if not instName in self:
+                self[instName] = value
+
 # {{{1 Functions to save a view in the database ###############################
 
 def saveViewCut(xmlElement, viewCut):   # {{{2
@@ -129,6 +176,56 @@ def saveActiveViewCut(xmlElement, abaqusObject): # {{{2
         vc.text = 'OFF'
 
 
+def saveDisplayGroup(xmlElement, viewport):  # {{{2
+    """Try to determine named sets to define current element display group"""
+
+    odbDisplayElement = xmlElement.find("odbDisplay")
+    if odbDisplayElement is None: return  # must already exist
+    xmlElement = ET.SubElement(odbDisplayElement, "displayGroup")
+
+    rootAssembly = abaqus.session.odbs[viewport.odbDisplay.name].rootAssembly
+    odbData = abaqus.session.odbData[viewport.odbDisplay.name]
+
+    odbDisplay = viewport.odbDisplay
+    viewCut = odbDisplay.viewCut
+    odbDisplay.setValues(viewCut=OFF)  # turn off temporarily
+    displaySet = InstSet(viewport.getActiveElementLabels())
+    odbDisplay.setValues(viewCut=viewCut)
+
+    # check for all
+    elset = InstSet(odbData.elementSets[' ALL ELEMENTS'].elements)
+    if elset.issubset(displaySet):
+        dg = ET.SubElement(xmlElement, "all")
+        return
+
+    # check whole instances
+    for instName, elements in displaySet.items():
+        if len(elements) == len(rootAssembly.instances[instName].elements):
+            dg = ET.SubElement(xmlElement, "instance")
+            dg.set('name', instName)
+            elements.clear()
+
+    # check for adding sets, largest to smallest
+    elsets = [(name, InstSet(elset.elements)) for name, elset in odbData.elementSets.items()]
+    elsets.sort(key=lambda s: len(s[1]), reverse=True)  # largest to smallest
+    for name, elset in elsets:
+        if elset.issubset(displaySet):
+            dg = ET.SubElement(xmlElement, "elset")
+            dg.set('name', name)
+            displaySet.difference_update(elset)
+
+    # TODO check for removing sets, largest to smallest
+
+    # record list of whatever individual element labels are remaining
+    for instName, value in displaySet.items():
+        if len(value) == 0:
+            continue
+        dg = ET.SubElement(xmlElement, "element")
+        dg.set('instance', instName)
+        dg.set('instanceElems', str(len(rootAssembly.instances[instName].elements)))
+        dg.text = intListToString(value)
+
+###############################################################################
 def saveOdbMeta(xmlElement, odbDisplay):   # {{{2
     """Add metadata attributes to odbDisplay element"""
     xmlElement.set('name', os.path.basename(odbDisplay.name))
@@ -237,7 +334,7 @@ knownObjects = {    # {{{2 What to save from each element type
         'rotationAngle', 'backgroundColor', 'offset', 'font', 'anchor' ],
     'Viewport': ['name', saveWindowState, saveColorMode,
         'origin', 'width', 'height',
-        'viewportAnnotationOptions', 'view', 'odbDisplay'],
+        'viewportAnnotationOptions', 'view', 'odbDisplay', saveDisplayGroup],
     'View': ['projection',
         'cameraTarget', 'cameraPosition', 'cameraUpVector',
         'width', 'viewOffsetX', 'viewOffsetY'],
@@ -298,10 +395,10 @@ def saveObject(xmlElement, abaqusObject):  # {{{2
                     getattr(abaqusObject, attr))
 
 
-def saveCurrentState(userView, abaqusObjects):  # {{{2
+def saveCurrentState(userView, viewports):  # {{{2
     """Main method called to record everything to an xml userView"""
     saveObject(userView, abaqus.session)  # save some session data
-    for abaqusObject in abaqusObjects:
+    for abaqusObject in viewports:
         if isinstance(abaqusObject, abaqus.ViewportType):
             if hasattr(abaqusObject.odbDisplay, 'name'):
                 odb = abaqus.session.odbs[abaqusObject.odbDisplay.name]
@@ -313,30 +410,49 @@ def saveCurrentState(userView, abaqusObjects):  # {{{2
     return userView
 
 
-def addSessionUserView(xmlView):    # {{{2 Update customData.userViews for the GUI
-    "Add a view to the session.customData"
-    id = xmldoc.assignUniqueId(xmlView)
-    name = xmlView.get('name', 'unknown')
-    datestr = xmlView.get('dateTime')
-    userData = xmlView.find('./Odb/userData')
-    if datestr is not None:
-        dateTime = iso8601.parse(datestr)
-        localtime = iso8601.time.localtime(dateTime)
-        datestr = iso8601.time.strftime('%Y-%m-%d %H:%M', localtime)
-    if userData is not None:
-        ud = '*'
-    else:
-        ud = ''
-    for od in xmlView.findall("./Viewport/odbDisplay"):
-        odbName = str(od.get('name'))
-        abaqus.session.customData.userViews.append(
-                (name, datestr, odbName, ud) )
-
-
 # {{{1 Functions to restore a view from the database ##########################
+def restoreDisplayGroup(xmlElement, displayGroup):  # {{{2
+    import displayGroupOdbToolset as dgo
+    first = True
+    for leafElement in xmlElement:
+        try:
+            if leafElement.tag == 'all':
+                leaf = dgo.Leaf(leafType=DEFAULT_MODEL)
+            elif leafElement.tag == 'element':
+                # TODO if str(len(inst.elements)) != leafElement.get('instanceElems'):
+                leaf = dgo.LeafFromModelElemLabels(elementLabels=(
+                    (leafElement.get('instance'), stringToIntList(leafElement.text)), ))
+            elif leafElement.tag == 'elset':
+                leaf = dgo.LeafFromElementSets(elementSets=(leafElement.get('name'),))
+            elif leafElement.tag == 'instance':
+                leaf = dgo.LeafFromPartInstance(partInstanceName=(leafElement.get('name'),))
+            elif leafElement.tag == 'material':
+                leaf = dgo.LeafFromElementMaterials(elementMaterials=(leafElement.get('name'),))
+            elif leafElement.tag == 'section':
+                leaf = dgo.LeafFromElementSections(elementSections=(leafElement.get('name'),))
+            else:
+                print(leafElement.tag, 'unsupported')
+                continue  # unsupported type
+        except ValueError:
+            raise
+        method = leafElement.get('method', 'add')
+        if method == 'add' and first:
+            displayGroup.replace(leaf=leaf)
+            first = False
+        elif method == 'add':
+            displayGroup.add(leaf=leaf)
+        elif method == 'remove':
+            displayGroup.remove(leaf=leaf)
+        elif method == 'replace':
+            displayGroup.replace(leaf=leaf)
+    return ''
 
-def restoreObject(xmlElement, abaqusObject):
-    "Recursively extract xml data and set abaqus values"
+def restoreObject(xmlElement, abaqusObject):  # {{{2
+    """Recursively extract xml data and set abaqus values"""
+
+    if xmlElement.tag == 'displayGroup':
+        return restoreDisplayGroup(xmlElement, abaqusObject)
+
     if callable(abaqusObject):
         arguments=xmlElement.attrib.copy()
         for xmlChild in xmlElement:
@@ -451,7 +567,7 @@ def restoreView(viewName, fileName=None):    # {{{2 Restore the specified xml us
     with ZipFile(fileName or databaseName) as database:
         with database.open(viewName + '.xml') as entry:
             userView = ET.fromstring(entry.read().decode())
-    assert userView.tag == 'userView'
+    assert userView.tag == 'userView', "Not a saved userView"
     for spectrum in userView.findall('Spectrum'):
         restoreObject(spectrum, abaqus.session.Spectrum)
     vps = userView.findall('Viewport')
@@ -482,7 +598,7 @@ def restoreAnnotations(viewName):    # {{{2 Restore annotations from the specifi
     with ZipFile(databaseName) as database:
         with database.open(viewName + '.xml') as entry:
             userView = ET.fromstring(entry.read().decode())
-    assert userView.tag == 'userView'
+    assert userView.tag == 'userView', "Not a saved userView"
     xmlUserData = userView.find('./Odb/userData')
     if xmlUserData is None:
         print("View does not contain annotations.")
