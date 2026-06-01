@@ -14,7 +14,7 @@ import customKernel # for registered list of userViews
 
 xmldoc = None
 databaseName = None
-Extra = namedtuple('Extra', ['odb', 'step', 'comment'], defaults=['', '', ''])
+Extra = namedtuple('Extra', ['odb', 'step', 'description'], defaults=['', '', ''])
 debug = os.environ.get('DEBUG')
 
 # {{{1 Utility functions ######################################################
@@ -387,13 +387,13 @@ def formatViewRow(zipinfo):  # {{{2
     name, ext = os.path.splitext(zipinfo.filename)
     if ext != '.xml':
         return None
-    extra = Extra(*((zipinfo.comment or b';;').decode().split(';', 2)))
+    extra = Extra(*((zipinfo.comment or b'\t\t').decode().split('\t', 2)))
     return viewsCommon.ViewRow(
         name,
         "{}-{:02}-{:02} {:02}:{:02}:{:02}".format(*zipinfo.date_time),
         extra.odb,
         extra.step,
-        extra.comment,
+        extra.description,
         )
 
 # {{{1 Database functions #########################################
@@ -413,15 +413,20 @@ def newView(viewName, viewports):    # {{{2
     if odbDisplay is not None:
         extra = extra._replace(odb=os.path.basename(odbDisplay.get('name', '')))
         extra = extra._replace(step=odbDisplay.get('step', ''))
+        description = []
         primary = odbDisplay.find('setPrimaryVariable/variableLabel')
         if primary is not None:
-            extra = extra._replace(comment=primary.text)
+            description.append(saferEval(primary.text))
+        refinement = odbDisplay.find('setPrimaryVariable/refinement')
+        if refinement is not None:
+            description.append(saferEval(refinement.text)[1])
+        extra = extra._replace(description=' '.join(description))
 
     now = datetime.now()
     info = ZipInfo(viewName + '.xml', now.timetuple()[:6])
     info.compress_type = ZIP_DEFLATED
 
-    info.comment = ';'.join(extra).encode()  # must be bytes
+    info.comment = '\t'.join(extra).encode()  # must be bytes
 
     if any([viewName == row.name for row in abaqus.session.customData.userViews]):
         deleteViews([viewName])

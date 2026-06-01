@@ -98,8 +98,8 @@ class ViewManagerDB(AFXDataDialog):
         self.table.setLeadingRows(numRows=1)
         self.table.setLeadingRowLabels('\t'.join([f.title() for f in ViewRow._fields]))
         self.table.setColumnEditable(ViewRow._fields.index('name'), True)
-        self.table.setColumnEditable(ViewRow._fields.index('comment'), True)
-        self.table.setStretchableColumn(ViewRow._fields.index('comment')) # Expand Comment as necessary
+        self.table.setColumnEditable(ViewRow._fields.index('description'), True)
+        self.table.setStretchableColumn(ViewRow._fields.index('description')) # Expand Description as necessary
 
         for col in range(self.table.getNumColumns()):
             self.table.setColumnSortable(col, TRUE)
@@ -185,8 +185,8 @@ class ViewManagerDB(AFXDataDialog):
             value = sender.getItemValue(tableRow, col)
             if field == 'name':
                 sendCommand("viewSave.renameView(viewName=%r, newName=%r)"%(viewName, value))
-            elif field == 'comment':
-                sendCommand("viewSave.setComment(viewName=%r, comment=%r)"%(viewName, value))
+            elif field == 'description':
+                sendCommand("viewSave.setDescription(viewName=%r, description=%r)"%(viewName, value))
 
 
     def onTable(self, sender, sel, ptr):
