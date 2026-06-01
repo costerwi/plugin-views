@@ -4,6 +4,7 @@ from collections import namedtuple
 from datetime import datetime
 import os
 import sys
+import re
 from tempfile import TemporaryFile
 import xml.etree.ElementTree as ET
 from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED
@@ -25,6 +26,10 @@ if not hasattr(customKernel.RegisteredList, "clear"):
             self.pop(0)
     customKernel.RegisteredList.clear = clear
 
+def saferEval(string):  # {{{2
+    """Check for trouble before eval"""
+    assert re.search(r'\w\(', string) == None, "Detected possible method call {!r}".format(string)
+    return eval(string)
 
 def encode(value=0, chars="abcdefghijklmnopqrstuvwxyz"):  # {{{2
     "Return the int value encoded into arbitrary base defined by chars."
@@ -336,7 +341,7 @@ def restoreObject(xmlElement, abaqusObject):
         arguments=xmlElement.attrib.copy()
         for xmlChild in xmlElement:
             if xmlChild.get('type') == 'argument':
-                arguments[xmlChild.tag] = eval(restoreObject(xmlChild, None))
+                arguments[xmlChild.tag] = saferEval(restoreObject(xmlChild, None))
         if debug:
             print(xmlElement.tag, "( %r )"%arguments)
         try:
@@ -353,7 +358,7 @@ def restoreObject(xmlElement, abaqusObject):
                 value = restoreObject(xmlChild, abaqusChild)
                 if len(value):
                     try:
-                        setValues[xmlChild.tag] = eval(value)
+                        setValues[xmlChild.tag] = saferEval(value)
                     except AttributeError as e:
                         print(e, repr(value))
 
