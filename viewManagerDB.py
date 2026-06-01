@@ -74,13 +74,13 @@ class ViewManagerDB(AFXDataDialog):
                 labelText='Database:\tSaved views database file',
                 tgt=self.form.databaseKw,
                 opts=AFXTEXTFIELD_STRING|AFXTEXTFIELD_READONLY|LAYOUT_CENTER_Y|LAYOUT_FILL_X)
-        #self.form.databaseKw.setTarget(self)
-        #self.form.databaseKw.setSelector(self.ID_FILE_CHANGED)
         icon = afxGetIcon('fileOpen')
         FXButton(p=frame, text='\tSelect view database file...', ic=icon,
                 tgt=self, sel=self.ID_SELECT_FILE,
                 opts=BUTTON_TOOLBAR | FRAME_RAISED | LAYOUT_RIGHT)
         FXMAPFUNC(self, SEL_COMMAND, self.ID_SELECT_FILE, ViewManagerDB.selectDatabaseFile)
+        self.form.databaseKw.setTarget(self)
+        self.form.databaseKw.setSelector(self.ID_FILE_CHANGED)
         FXMAPFUNC(self, SEL_COMMAND, self.ID_FILE_CHANGED, ViewManagerDB.onFileChanged)
 
         self.table = myAFXTable(
@@ -227,8 +227,9 @@ class ViewManagerDB(AFXDataDialog):
 
     def onFileChanged(self, sender, sel, ptr):
         """A new database file was selected"""
-        sendCommand('viewSave.scanDatabase({:r})'.format(self.form.databaseKw.getValue()))
         return 1
+        filename = self.form.databaseKw.getValue()
+        sendCommand('viewSave.scanDatabase("{!r}")'.format(filename))
 
 
     def show(self):
