@@ -559,7 +559,7 @@ def newView(viewName, viewports):    # {{{2
         database.writestr(info, ET.tostring(userView, encoding='unicode'))
     abaqus.session.customData.userViews.append(formatViewRow(info))
 
-def restoreView(viewName, fileName=None):    # {{{2 Restore the specified xml userview Id
+def restoreView(viewName, fileName=None, reprint=False):    # {{{2 Restore the specified viewName
     """Retrieve the xmlElement for the identified userView.
 
     Called by viewManagerForm when executing the form command.
@@ -590,7 +590,7 @@ def restoreView(viewName, fileName=None):    # {{{2 Restore the specified xml us
     else:
         print("No viewports defined.")
 
-def restoreAnnotations(viewName):    # {{{2 Restore annotations from the specified xml userview Id
+def restoreAnnotations(viewName):    # {{{2 Restore annotations from the specified viewName
     """Retrieve the xmlElement for the identified userView.
 
     Called by viewManagerDB to restore saved annotations.
