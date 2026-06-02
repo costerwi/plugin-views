@@ -36,7 +36,7 @@ def saferEval(string):  # {{{2
 def intRanges(intList):
     """Yield ranges of continuous sequences within list of integers
 
-    >>> list(ranges([10,11,12,1,2,3,4,17,18,20]))
+    >>> list(intRanges([10,11,12,1,2,3,4,17,18,20]))
     [(1, 4), (10, 12), (17, 18), (20, 20)]
     """
 
@@ -90,7 +90,26 @@ def stringToIntList(strList):
     return intList
 
 class InstSet(dict):  # {{{2
-    """Class for working with sets defined across multiple instances"""
+    """Class for working with sets defined across multiple instances
+
+    >>> elset1=InstSet({'Part-1-1': (1,5,7,15), 'Part-2': (1,5,7,15)})
+    >>> len(elset1), elset1
+    (8, {'Part-1-1': {1, 15, 5, 7}, 'Part-2': {1, 15, 5, 7}})
+    >>> elset2=InstSet({'Part-2': (1,15)})
+    >>> len(elset2), elset2
+    (2, {'Part-2': {1, 15}})
+    >>> elset1.issubset(elset2)
+    False
+    >>> elset2.issubset(elset1)
+    True
+    >>> elset1.difference_update(elset2)
+    >>> len(elset1), elset1
+    (6, {'Part-1-1': {1, 15, 5, 7}, 'Part-2': {5, 7}})
+    >>> elset1.update(elset2)
+    >>> len(elset1), elset1
+    (8, {'Part-1-1': {1, 15, 5, 7}, 'Part-2': {1, 5, 7, 15}})
+    """
+
     def __init__(self, other):
         super().__init__()
         for InstName, value in other.items():
@@ -100,32 +119,31 @@ class InstSet(dict):  # {{{2
         return sum(len(value) for value in self.values())
 
     def issubset(self, other):
+        """Test whether every element in the set is in other."""
         for instName, value in self.items():
             if not value.issubset(other.get(instName, set())):
                 return False
         return True
 
-    def __str__(self):
-        s = []
-        for instName, value in self.items():
-            s.append("{} [{}]".format(instName, len(value)))
-        return '\n'.join(s)
-
-    def difference_update(self, other):
+    def difference_update(self, *others):
+        """Update the set, removing elements found in others."""
         empty = []
-        for instName, value in self.items():
-            value -= other.get(instName, set())
-            if not(value):
-                empty.append(instName)
+        for other in others:
+            for instName, value in self.items():
+                value.difference_update(other.get(instName, set()))
+                if not(value):
+                    empty.append(instName)
         for instName in empty:
             del self[instName]
 
-    def union_update(self, other):
-        for instName, value in self.items():
-            value += other.get(instName, set())
-        for instName, value in other.items():
-            if not instName in self:
-                self[instName] = value
+    def update(self, *others):
+        """Update the set, adding elements from all others."""
+        for other in others:
+            for instName, value in self.items():
+                value.update(other.get(instName, set()))
+            for instName, value in other.items():
+                if not instName in self:
+                    self[instName] = set(value)
 
 # {{{1 Functions to save a view in the database ###############################
 
@@ -758,4 +776,7 @@ def init(): # {{{2
                 printToFileCallback)
     scanDatabase(viewsCommon.databaseName)
 
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod()
 
