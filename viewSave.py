@@ -411,14 +411,16 @@ def saveCurrentState(userView, viewports):  # {{{2
     """Main method called to record everything to an xml userView"""
     saveObject(userView, abaqus.session)  # save some session data
     for abaqusObject in viewports:
-        if isinstance(abaqusObject, abaqus.ViewportType):
-            if hasattr(abaqusObject.odbDisplay, 'name'):
-                odb = abaqus.session.odbs[abaqusObject.odbDisplay.name]
-                if len(odb.userData.annotations):
-                    odbElement = ET.SubElement(userView, 'Odb')
-                    saveObject(odbElement, odb)
-            vpElement = ET.SubElement(userView, 'Viewport')
-            saveObject(vpElement, abaqusObject)
+        assert isinstance(abaqusObject, abaqus.ViewportType), "expecting a viewport"
+        if hasattr(abaqusObject.odbDisplay, 'name'):
+            odb = abaqus.session.odbs[abaqusObject.odbDisplay.name]
+            if len(odb.userData.annotations):
+                odbElement = ET.SubElement(userView, 'Odb')
+                saveObject(odbElement, odb)
+        vpElement = ET.SubElement(userView, 'Viewport')
+        saveObject(vpElement, abaqusObject)
+        if MAXIMIZED == viewport.windowState:
+            break  # this will obstruct any other viewports
     return userView
 
 
