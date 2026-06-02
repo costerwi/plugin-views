@@ -8,28 +8,30 @@ import re
 from tempfile import TemporaryFile
 import xml.etree.ElementTree as ET
 from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED
-import viewsCommon
-import abaqus
+
+try:
+    import abaqus
+except ImportError:
+    print('Must be run from Abaqus CAE')
 from abaqusConstants import *
-import customKernel # for registered list of userViews
+
+import viewsCommon
 
 xmldoc = None
-databaseName = None
+databaseName = viewsCommon.databaseName
 Extra = namedtuple('Extra', ['odb', 'step', 'description'], defaults=['', '', ''])
 debug = os.environ.get('DEBUG')
 
 # {{{1 Utility functions ######################################################
 
-if not hasattr(customKernel.RegisteredList, "clear"):
-    def clear(self):
-        while len(self) > 0:
-            self.pop(0)
-    customKernel.RegisteredList.clear = clear
-
 def saferEval(string):  # {{{2
     """Check for trouble before eval"""
     assert re.search(r'\w\(', string) == None, "Detected possible method call {!r}".format(string)
-    return eval(string)
+    try:
+        value = eval(string)
+    except SyntaxError:
+        value = string
+    return value
 
 def intRanges(intList):
     """Yield ranges of continuous sequences within list of integers
@@ -226,8 +228,8 @@ def saveDisplayGroup(xmlElement, viewport):  # {{{2
         dg.text = intListToString(value)
 
 ###############################################################################
-def saveOdbMeta(xmlElement, odbDisplay):   # {{{2
-    """Add metadata attributes to odbDisplay element"""
+def saveStep(xmlElement, odbDisplay):   # {{{2
+    """Add step name attribute to odbDisplay element"""
     xmlElement.set('name', os.path.basename(odbDisplay.name))
     stepName = odbDisplay.fieldFrame[0]
     if isinstance(stepName, int):
@@ -310,20 +312,12 @@ def saveWindowState(xmlElement, viewport):  # {{{2
 
 def saveColorMode(xmlElement, viewport):  # {{{2
     "Store the viewport colorMode"
-    if DEFAULT_COLORS == viewport.colorMode:
-        ET.SubElement(xmlElement, 'disableMultipleColors')
-        return
     for name, cmap in viewport.colorMappings.items():
         if str(viewport.colorMode).startswith(str(cmap.type)):
             break
     else:
-        if debug:
-            print('unknown colorMode', viewport.colorMode)
         return
-    # TODO
-    #ET.SubElement(xmlElement, 'enableMultipleColors')
-    if debug:
-        print('colorMode', name)
+    xmlElement.set('colorMode', name)  # attribute of Viewport
 
 
 knownObjects = {    # {{{2 What to save from each element type
@@ -338,8 +332,8 @@ knownObjects = {    # {{{2 What to save from each element type
     'View': ['projection',
         'cameraTarget', 'cameraPosition', 'cameraUpVector',
         'width', 'viewOffsetX', 'viewOffsetY'],
-    'OdbDisplay': [saveOdbMeta, 'display', savePlotStateOptions, 'basicOptions', 'commonOptions',
-        'viewCutOptions', saveActiveViewCut ],
+    'OdbDisplay': ['display', 'basicOptions', 'commonOptions', 'viewCutOptions',
+        saveStep, savePlotStateOptions, saveActiveViewCut ],
     'ViewCut': [ 'name', saveViewCut ],
     'float' : [],
     'int': [],
@@ -411,17 +405,28 @@ def saveCurrentState(userView, viewports):  # {{{2
 
 
 # {{{1 Functions to restore a view from the database ##########################
-def restoreDisplayGroup(xmlElement, displayGroup):  # {{{2
+def restoreDisplayGroup(xmlElement, odbDisplay):  # {{{2
     import displayGroupOdbToolset as dgo
+    xmlDisplayGroup = xmlElement.find('displayGroup')
+    if xmlDisplayGroup is None:
+        return
+    odb = abaqus.session.odbs[odbDisplay.name]
     first = True
-    for leafElement in xmlElement:
+    for leafElement in xmlDisplayGroup:
         try:
             if leafElement.tag == 'all':
                 leaf = dgo.Leaf(leafType=DEFAULT_MODEL)
             elif leafElement.tag == 'element':
-                # TODO if str(len(inst.elements)) != leafElement.get('instanceElems'):
-                leaf = dgo.LeafFromModelElemLabels(elementLabels=(
-                    (leafElement.get('instance'), stringToIntList(leafElement.text)), ))
+                instName = leafElement.get('instance')
+                instance = odb.rootAssembly.instances[instName]
+                if str(len(instance.elements)) == leafElement.get('instanceElems'):
+                    # element labels should be good
+                    leaf = dgo.LeafFromModelElemLabels(elementLabels=(
+                        (instName, stringToIntList(leafElement.text)), ))
+                else:
+                    # instance was remeshed; use the whole instance
+                    leaf = dgo.LeafFromPartInstance(
+                            partInstanceName=(instName,))
             elif leafElement.tag == 'elset':
                 leaf = dgo.LeafFromElementSets(elementSets=(leafElement.get('name'),))
             elif leafElement.tag == 'instance':
@@ -433,25 +438,46 @@ def restoreDisplayGroup(xmlElement, displayGroup):  # {{{2
             else:
                 print(leafElement.tag, 'unsupported')
                 continue  # unsupported type
-        except ValueError:
-            raise
+        except KeyError:
+            continue
         method = leafElement.get('method', 'add')
         if method == 'add' and first:
-            displayGroup.replace(leaf=leaf)
+            odbDisplay.displayGroup.replace(leaf=leaf)
             first = False
         elif method == 'add':
-            displayGroup.add(leaf=leaf)
+            odbDisplay.displayGroup.add(leaf=leaf)
         elif method == 'remove':
-            displayGroup.remove(leaf=leaf)
+            odbDisplay.displayGroup.remove(leaf=leaf)
         elif method == 'replace':
-            displayGroup.replace(leaf=leaf)
+            odbDisplay.displayGroup.replace(leaf=leaf)
     return ''
+
+def restoreStep(xmlElement, odbDisplay):  # {{{2
+    """Set currect step according to saved name"""
+    stepName = xmlElement.get('step')
+    odb = abaqus.session.odbs[odbDisplay.name]
+    try:
+        frame = odb.steps[stepName].frames[-1]
+        odbDisplay.setFrame(frame=frame)
+    except KeyError:
+        return
+
+def restoreColorMode(xmlElement, viewport):  # {{{2
+    colorMode = xmlElement.get('colorMode')
+    if colorMode is None:
+        return
+    colorMapping = viewport.colorMappings[colorMode]
+    viewport.setColor(colorMapping=colorMapping)
 
 def restoreObject(xmlElement, abaqusObject):  # {{{2
     """Recursively extract xml data and set abaqus values"""
 
-    if xmlElement.tag == 'displayGroup':
-        return restoreDisplayGroup(xmlElement, abaqusObject)
+    if xmlElement.tag == 'odbDisplay':
+        abaqusObject.display.setValues(plotState=(UNDEFORMED,))
+        restoreStep(xmlElement, abaqusObject)
+        restoreDisplayGroup(xmlElement, abaqusObject)
+    elif xmlElement.tag == 'Viewport':
+        restoreColorMode(xmlElement, abaqusObject)
 
     if callable(abaqusObject):
         arguments=xmlElement.attrib.copy()
@@ -470,13 +496,13 @@ def restoreObject(xmlElement, abaqusObject):  # {{{2
     setValues = {}
     for xmlChild in xmlElement:
         if xmlChild.get('type') is None:
-                abaqusChild = getattr(abaqusObject, xmlChild.tag, None)
-                value = restoreObject(xmlChild, abaqusChild)
-                if len(value):
-                    try:
-                        setValues[xmlChild.tag] = saferEval(value)
-                    except AttributeError as e:
-                        print(e, repr(value))
+            abaqusChild = getattr(abaqusObject, xmlChild.tag, None)
+            value = restoreObject(xmlChild, abaqusChild)  # recursive
+            if len(value):
+                try:
+                    setValues[xmlChild.tag] = saferEval(value)
+                except AttributeError as e:
+                    print(e, repr(value))
 
     if hasattr(abaqusObject, 'setValues'):
         removed = {}
@@ -506,8 +532,6 @@ def restoreObject(xmlElement, abaqusObject):  # {{{2
 def formatViewRow(zipinfo):  # {{{2
     """Create a ViewRow to be added to customData.userViews"""
     name, ext = os.path.splitext(zipinfo.filename)
-    if ext != '.xml':
-        return None
     extra = Extra(*((zipinfo.comment or b'\t\t').decode().split('\t', 2)))
     return viewsCommon.ViewRow(
         name,
@@ -568,8 +592,11 @@ def restoreView(viewName, fileName=None, reprint=False):    # {{{2 Restore the s
         with database.open(viewName + '.xml') as entry:
             userView = ET.fromstring(entry.read().decode())
     assert userView.tag == 'userView', "Not a saved userView"
+
+    # Restore user defined spectrum
     for spectrum in userView.findall('Spectrum'):
         restoreObject(spectrum, abaqus.session.Spectrum)
+
     vps = userView.findall('Viewport')
     vpObject = list(abaqus.session.viewports.values())[0]  # current viewport
     if len(vps) > 1:
@@ -699,9 +726,8 @@ def scanDatabase(fileName=None):  # {{{2
         with ZipFile(fileName) as database:
             for info in database.infolist():
                 name, ext = os.path.splitext(info.filename)
-                if ext != '.xml':
-                    continue
-                newRows.append(formatViewRow(info))
+                if ext == '.xml':
+                    newRows.append(formatViewRow(info))
     except FileNotFoundError:
         pass
     abaqus.session.customData.userViews.extend(newRows)
@@ -712,6 +738,13 @@ def init(): # {{{2
     Called by kernelInitString in toolset registration.
     """
     import methodCallback
+    import customKernel # for registered list of userViews
+
+    if not hasattr(customKernel.RegisteredList, "clear"):
+        def clear(self):
+            while len(self) > 0:
+                self.pop(0)
+        customKernel.RegisteredList.clear = clear
 
     def printToFileCallback(callingObject, args, kws, user):
         """Add current view to the database before printing"""
