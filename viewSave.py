@@ -370,8 +370,6 @@ skipMembers = {
 def saveObject(xmlElement, abaqusObject):  # {{{2
     "Recursively read abaqus data and store in xmldoc."
 
-    import re
-
     # Must convert type to string since Abaqus does not define all types
     m = re.search(r"'(?:abaqus\.)?(.+)'", str(type(abaqusObject)))
     typeName = m.group(1)
@@ -410,15 +408,15 @@ def saveObject(xmlElement, abaqusObject):  # {{{2
 def saveCurrentState(userView, viewports):  # {{{2
     """Main method called to record everything to an xml userView"""
     saveObject(userView, abaqus.session)  # save some session data
-    for abaqusObject in viewports:
-        assert isinstance(abaqusObject, abaqus.ViewportType), "expecting a viewport"
-        if hasattr(abaqusObject.odbDisplay, 'name'):
-            odb = abaqus.session.odbs[abaqusObject.odbDisplay.name]
+    for viewport in viewports:
+        assert isinstance(viewport, abaqus.ViewportType), "expecting a viewport"
+        if hasattr(viewport.odbDisplay, 'name'):
+            odb = abaqus.session.odbs[viewport.odbDisplay.name]
             if len(odb.userData.annotations):
                 odbElement = ET.SubElement(userView, 'Odb')
                 saveObject(odbElement, odb)
         vpElement = ET.SubElement(userView, 'Viewport')
-        saveObject(vpElement, abaqusObject)
+        saveObject(vpElement, viewport)
         if MAXIMIZED == viewport.windowState:
             break  # this will obstruct any other viewports
     return userView
