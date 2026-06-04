@@ -107,7 +107,7 @@ class ViewManagerDB(AFXDataDialog):
 
         self.table.setPopupOptions(
                 AFXTable.POPUP_DELETE_ROW) # | AFXTable.POPUP_FILE)
-        #self.table.appendClientPopupItem('After')
+        self.table.appendClientPopupItem('Reprint selected view(s)', icon=afxGetIcon('filePrint'))
 
         AFXTextField(p=self.mainframe,
                 ncols=15,
@@ -128,7 +128,7 @@ class ViewManagerDB(AFXDataDialog):
     def updateTable(self):
         "Read view settings from customData.userViews registered list"
         sortColumn = self.table.getCurrentSortColumn()
-
+        
         # Collect filtered table data
         filtered = []
         filterre = re.compile(self.filter, re.IGNORECASE)
@@ -166,7 +166,6 @@ class ViewManagerDB(AFXDataDialog):
                 selected = tableRow
             self.table.deselectRow(tableRow)
             for col, itemtext in enumerate(row):
-                # TODO make icon for annotation column
                 self.table.setItemValue(
                         row=tableRow,
                         column=col,
@@ -187,6 +186,7 @@ class ViewManagerDB(AFXDataDialog):
             field = ViewRow._fields[col]
             value = sender.getItemValue(tableRow, col)
             if field == 'name':
+                self.getMode().viewNameKw.setValue(value)
                 sendCommand("viewSave.renameView(viewName=%r, newName=%r)"%(viewName, value))
             elif field == 'description':
                 sendCommand("viewSave.setDescription(viewName=%r, description=%r)"%(viewName, value))
