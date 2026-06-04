@@ -549,16 +549,21 @@ def restoreObject(xmlElement, abaqusObject):  # {{{2
 
 # {{{1 File access functions ##################################################
 
-def formatViewRow(zipinfo):  # {{{2
+def formatViewRow(zipinfo, userView):  # {{{2
     """Create a ViewRow to be added to customData.userViews"""
     name, ext = os.path.splitext(zipinfo.filename)
-    extra = Extra(*((zipinfo.comment or b'\t\t').decode().split('\t', 2)))
+    odbName = ''
+    stepName = ''
+    odbDisplay = userView.find('Viewport/odbDisplay')
+    if odbDisplay is not None:
+        odbName = odbDisplay.get('name', odbName)
+        stepName = odbDisplay.get('step', stepName)
     return viewsCommon.ViewRow(
         name,
         "{}-{:02}-{:02} {:02}:{:02}:{:02}".format(*zipinfo.date_time),
-        extra.odb,
-        extra.step,
-        extra.description,
+        odbName,
+        stepName,
+        userView.get('description', ''),
         )
 
 # {{{1 Database functions #########################################
@@ -573,11 +578,8 @@ def newView(viewName, viewports):    # {{{2
     userView.set('version', str(viewsCommon.__version__))
     saveCurrentState(userView, viewports)
 
-    extra = Extra()
     odbDisplay = userView.find('Viewport/odbDisplay')
     if odbDisplay is not None:
-        extra = extra._replace(odb=os.path.basename(odbDisplay.get('name', '')))
-        extra = extra._replace(step=odbDisplay.get('step', ''))
         description = []
         primary = odbDisplay.find('setPrimaryVariable/variableLabel')
         if primary is not None:
@@ -585,23 +587,18 @@ def newView(viewName, viewports):    # {{{2
         refinement = odbDisplay.find('setPrimaryVariable/refinement')
         if refinement is not None:
             description.append(saferEval(refinement.text)[1])
-        extra = extra._replace(description=' '.join(description))
+        userView.set('description', ' '.join(description))
 
     now = datetime.now()
     info = ZipInfo(viewName + '.xml', now.timetuple()[:6])
     info.compress_type = ZIP_DEFLATED
 
-    info.comment = '\t'.join(extra).encode()  # must be bytes
-
     if any([viewName == row.name for row in abaqus.session.customData.userViews]):
         deleteViews([viewName])
 
     with ZipFile(databaseName, mode='a') as database:
-        if not database.comment:
-            database.comment = 'This is a database of stored view data ' \
-                'for the Abaqus CAE View Manager plugin.'.encode()
         database.writestr(info, ET.tostring(userView, encoding='unicode'))
-    abaqus.session.customData.userViews.append(formatViewRow(info))
+    abaqus.session.customData.userViews.append(formatViewRow(info, userView))
 
 def restoreView(viewName, fileName=None, reprint=False):    # {{{2 Restore the specified viewName
     """Retrieve the xmlElement for the identified userView.
@@ -696,12 +693,16 @@ def setDescription(viewName, description):  # {{{2
     with TemporaryFile() as temp:
         with ZipFile(temp, 'w') as dest_zip, ZipFile(databaseName) as source_zip:
             for info in source_zip.infolist(): # Iterate over each file in zip
-                base, ext = os.path.splitext(info.filename)
-                if base == viewName and ext == '.xml':  # must match base
-                    extra = '\t'.join([row.odb, row.step, description])
-                    info.comment = extra.encode()
-                    rowNumber = i
-                dest_zip.writestr(info, source_zip.read(info))
+                if info.filename != viewName + '.xml':
+                    # copy non-matching entries
+                    dest_zip.writestr(info, source_zip.read(info))
+                else:
+                    # set description attribute
+                    with source_zip.open(info) as entry:
+                        userView = ET.fromstring(entry.read().decode())
+                    assert userView.tag == 'userView', "Not a userView"
+                    userView.set('description', description)
+                    dest_zip.writestr(info, ET.tostring(userView, encoding='unicode'))
             dest_zip.comment = source_zip.comment # Copy the ZipFile.comment if available
         temp.seek(0)
         with open(databaseName, 'wb') as out:
@@ -722,12 +723,10 @@ def renameView(viewName, newName):   # {{{2 Rename a userview
     with TemporaryFile() as temp:
         with ZipFile(temp, 'w') as dest_zip, ZipFile(databaseName) as source_zip:
             for info in source_zip.infolist(): # Iterate over each file in zip
-                base, ext = os.path.splitext(info.filename)
-                if ext == '.xml':
-                    if base == viewName:  # must match base
-                        info.filename = info.filename.replace(viewName, newName)
-                    elif base == newName:
-                        continue  # remove existing view with this name
+                if info.filename == viewName + '.xml':
+                    info.filename = newName + '.xml'
+                elif info.filename == newName + '.xml':
+                    continue  # remove existing view with this name
                 dest_zip.writestr(info, source_zip.read(info))
             dest_zip.comment = source_zip.comment # Copy the comment if available
         temp.seek(0)
@@ -737,17 +736,24 @@ def renameView(viewName, newName):   # {{{2 Rename a userview
 # {{{1 Initialization functions #########################################
 
 def scanDatabase(fileName=None):  # {{{2
-    "Read existing database entries into userViews"
+    """Read existing database entries into userViews RegisteredList"""
     global databaseName
     databaseName = fileName or databaseName
     abaqus.session.customData.userViews.clear()
     newRows = []
     try:
-        with ZipFile(fileName) as database:
+        with ZipFile(databaseName) as database:
             for info in database.infolist():
-                name, ext = os.path.splitext(info.filename)
-                if ext == '.xml':
-                    newRows.append(formatViewRow(info))
+                if not info.filename.endswith('.xml'):
+                    continue  # skip non-xml files
+                try:
+                    with database.open(info) as entry:
+                        userView = ET.fromstring(entry.read().decode())
+                    if userView.tag != 'userView':
+                        continue  # skip non-userView files
+                    newRows.append(formatViewRow(info, userView))
+                except:
+                    pass
     except FileNotFoundError:
         pass
     abaqus.session.customData.userViews.extend(newRows)
