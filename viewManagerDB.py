@@ -234,7 +234,7 @@ class ViewManagerDB(AFXDataDialog):
         if not hasattr(self, 'userViewsQuery'):
             return
         filename = self.form.databaseKw.getValue()
-        sendCommand('viewSave.scanDatabase("{!r}")'.format(filename))
+        sendCommand('viewSave.scanDatabase({!r})'.format(filename))
 
 
     def show(self):
