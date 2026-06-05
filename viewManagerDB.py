@@ -48,8 +48,9 @@ class ViewManagerDB(AFXDataDialog):
         ID_BUTTON_ANNOTATION,
         ID_SELECT_FILE,
         ID_FILE_CHANGED,
+        ID_REPRINT,
         ID_LAST
-    ) = range(AFXDataDialog.ID_LAST, AFXDataDialog.ID_LAST + 6)
+    ) = range(AFXDataDialog.ID_LAST, AFXDataDialog.ID_LAST + 7)
 
 
     def __init__(self, form):
@@ -107,7 +108,11 @@ class ViewManagerDB(AFXDataDialog):
 
         self.table.setPopupOptions(
                 AFXTable.POPUP_DELETE_ROW) # | AFXTable.POPUP_FILE)
-        self.table.appendClientPopupItem('Reprint selected view(s)', icon=afxGetIcon('filePrint'))
+        self.table.appendClientPopupItem('Reprint selected view(s)',
+                icon=afxGetIcon('filePrint'),
+                tgt=self,
+                sel=self.ID_REPRINT)
+        FXMAPFUNC(self, SEL_COMMAND, self.ID_REPRINT, ViewManagerDB.onReprint)
 
         AFXTextField(p=self.mainframe,
                 ncols=15,
@@ -200,7 +205,17 @@ class ViewManagerDB(AFXDataDialog):
             self.getMode().viewNameKw.setValue(viewName)
         if tableRow == 0:
             self.updateTable()  # sorting has changed
- 
+
+
+    def onReprint(self, sender, sel, ptr):
+        "Reprint selected views"
+        reprint = []
+        for row in range(1, self.table.getNumRows()):
+            if self.table.isAnyItemInRowSelected(row):
+                reprint.append(self.viewNames[row - 1])
+        for viewName in reprint:
+            sendCommand("viewSave.restoreView({!r}, reprint=True)".format(viewName))
+
 
     def onFilter(self, sender, sel, ptr):
         "Search field was changed"
@@ -266,7 +281,6 @@ class ViewManagerForm(AFXForm):
         AFXForm.__init__(self, owner) # Construct the base class.
                 
         # Commands.
-        #scanDatabase = AFXGuiCommand(mode=self, method='scanDatabase', objectName='viewSave')
         restoreView = AFXGuiCommand(mode=self, method='restoreView', objectName='viewSave')
 
         self.viewNameKw = AFXStringKeyword(command=restoreView,

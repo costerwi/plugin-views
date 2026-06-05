@@ -17,9 +17,7 @@ from abaqusConstants import *
 
 import viewsCommon
 
-xmldoc = None
 databaseName = viewsCommon.databaseName
-Extra = namedtuple('Extra', ['odb', 'step', 'description'], defaults=['', '', ''])
 debug = os.environ.get('DEBUG')
 
 # {{{1 Utility functions ######################################################
@@ -368,7 +366,7 @@ skipMembers = {
         }
 
 def saveObject(xmlElement, abaqusObject):  # {{{2
-    "Recursively read abaqus data and store in xmldoc."
+    "Recursively read abaqus data and store in userView."
 
     # Must convert type to string since Abaqus does not define all types
     m = re.search(r"'(?:abaqus\.)?(.+)'", str(type(abaqusObject)))
@@ -566,7 +564,7 @@ def formatViewRow(zipinfo, userView):  # {{{2
 
 # {{{1 Database functions #########################################
 
-def newView(viewName, viewports):    # {{{2
+def newView(viewName, viewports=[], imageFormat=PNG):    # {{{2
     "Add a new userView to the xml document"
 
     userView = ET.Element('userView')
@@ -576,24 +574,43 @@ def newView(viewName, viewports):    # {{{2
     userView.set('version', str(viewsCommon.__version__))
     saveCurrentState(userView, viewports)
 
-    odbDisplay = userView.find('Viewport/odbDisplay')
-    if odbDisplay is not None:
-        description = []
-        primary = odbDisplay.find('setPrimaryVariable/variableLabel')
-        if primary is not None:
-            description.append(saferEval(primary.text))
-        refinement = odbDisplay.find('setPrimaryVariable/refinement')
-        if refinement is not None:
-            description.append(saferEval(refinement.text)[1])
-        userView.set('description', ' '.join(description))
+    # Save print options for the selected image format
+    optionsDict = {PNG: 'pngOptions', SVG: 'svgOptions',
+            TIFF: 'tiffOptions', PS: 'psOptions', EPS: 'epsOptions'}
+    optionName = optionsDict.get(imageFormat)
+    if optionName:
+        options = ET.SubElement(userView, optionName)
+        saveObject(options, getattr(abaqus.session, optionName))
 
+    # Find some initial description for the view
+    description = ''
+    for row in abaqus.session.customData.userViews:
+        if row.name == viewName:
+            description = row.description
+            deleteViews([viewName])
+            break
+    else:
+        description = []
+        for odbDisplay in userView.findall('Viewport/odbDisplay'):
+            odbDescription = []
+            primary = odbDisplay.find('setPrimaryVariable/variableLabel')
+            if primary is not None:
+                odbDescription.append(saferEval(primary.text))
+            refinement = odbDisplay.find('setPrimaryVariable/refinement')
+            if refinement is not None:
+                odbDescription.append(saferEval(refinement.text)[1])
+            plotState = odbDisplay.find('display/plotState')
+            if plotState is not None:
+                for ps in saferEval(plotState.text):
+                    odbDescription.append(str(ps).replace('_', ' ').lower())
+            description.append(' '.join(odbDescription))
+        description = ', '.join(description)
+    userView.set('description', description)
+
+    # Append to database
     now = datetime.now()
     info = ZipInfo(viewName + '.xml', now.timetuple()[:6])
     info.compress_type = ZIP_DEFLATED
-
-    if any([viewName == row.name for row in abaqus.session.customData.userViews]):
-        deleteViews([viewName])
-
     with ZipFile(databaseName, mode='a') as database:
         database.writestr(info, ET.tostring(userView, encoding='unicode'))
     abaqus.session.customData.userViews.append(formatViewRow(info, userView))
@@ -612,25 +629,43 @@ def restoreView(viewName, fileName=None, reprint=False):    # {{{2 Restore the s
     for spectrum in userView.findall('Spectrum'):
         restoreObject(spectrum, abaqus.session.Spectrum)
 
-    vps = userView.findall('Viewport')
-    vpObject = list(abaqus.session.viewports.values())[0]  # current viewport
-    if len(vps) > 1:
-        for vpElement in vps:
+    # Restore Viewports
+    viewportElements = userView.findall('Viewport')
+    updatedViewports = []
+    vpObject = abaqus.session.viewports[abaqus.session.currentViewportName]
+    if len(viewportElements) == 1:
+        vpElement = viewportElements[0]
+        # restoreObject settings to the current viewport
+        restoreObject(vpElement, vpObject)
+        updatedViewports.append(vpObject)
+    else:
+        # restore to same viewport names
+        for vpElement in viewportElements:
             vpname = vpElement.get('name')
-            if vpname in abaqus.session.viewports:
+            try:
                 vpObject = abaqus.session.viewports[vpname]
-            else:
+            except KeyError:
                 # Create viewports as necessary for the userView
                 odb = abaqus.session.odbs[vpObject.odbDisplay.name]
                 vpObject = abaqus.session.Viewport(name=vpname)
                 vpObject.setValues(displayedObject=odb)
             restoreObject(vpElement, vpObject)
-    elif len(vps) == 1:
-        vpElement = vps[0]
-        # restoreObject settings to the current viewport
-        restoreObject(vpElement, vpObject)
+            updatedViewports.append(vpObject)
+
+    # Restore print options and identify image format previously used
+    optionsDict = {PNG: 'pngOptions', SVG: 'svgOptions',
+            TIFF: 'tiffOptions', PS: 'psOptions', EPS: 'epsOptions'}
+    for imageFormat, optionName in optionsDict.items():
+        options = userView.find(optionName)
+        if options is None:
+            continue
+        restoreObject(options, getattr(abaqus.session, optionName))
+        break
     else:
-        print("No viewports defined.")
+        imageFormat = PNG  # default
+    if reprint:
+        # Make a new image of this view
+        abaqus.session.printToFile(fileName=viewName, format=imageFormat, canvasObjects=updatedViewports)
 
 def restoreAnnotations(viewName):    # {{{2 Restore annotations from the specified viewName
     """Retrieve the xmlElement for the identified userView.
@@ -772,7 +807,11 @@ def init(): # {{{2
 
     def printToFileCallback(callingObject, args, kws, user):
         """Add current view to the database before printing"""
-        newView(viewName=kws['fileName'], viewports=kws['canvasObjects'])
+        relpath = os.path.relpath(kws['fileName'])
+        viewName, _ = os.path.splitext(relpath)
+        viewports = kws['canvasObjects']
+        imageFormat = kws['format']
+        newView(viewName, viewports, imageFormat)
 
     # Add to session.customData
     if not hasattr(abaqus.session.customData, "userViews"):
