@@ -373,8 +373,6 @@ def saveObject(xmlElement, abaqusObject):  # {{{2
     typeName = m.group(1)
     if typeName in knownObjects:
         members = knownObjects[typeName]
-        if debug:
-            print("knownObject %r has members %r"%(typeName, members))
     else:
         # Try to figure out which members to save for this object type
         members = knownObjects.setdefault(typeName, [])
@@ -392,8 +390,6 @@ def saveObject(xmlElement, abaqusObject):  # {{{2
         return
     # Complex type with data members
     for attr in members:
-        if debug:
-            print("saving member %r"%attr)
         if 'name' == attr:
             xmlElement.set('name', abaqusObject.name)
         elif callable(attr):
@@ -500,8 +496,6 @@ def restoreObject(xmlElement, abaqusObject):  # {{{2
         for xmlChild in xmlElement:
             if xmlChild.get('type') == 'argument':
                 arguments[xmlChild.tag] = saferEval(restoreObject(xmlChild, None))
-        if debug:
-            print(xmlElement.tag, "( %r )"%arguments)
         try:
             abaqusObject = abaqusObject(**arguments)
         except Exception as e: # TODO better error checking!
@@ -523,12 +517,8 @@ def restoreObject(xmlElement, abaqusObject):  # {{{2
     if hasattr(abaqusObject, 'setValues'):
         removed = {}
         while len(setValues):
-            if debug:
-                print(xmlElement.tag, ".setValues %r"%setValues)
             try:
                 abaqusObject.setValues(**setValues)
-                if debug and removed:
-                    print('removed invalid keywords', removed)
                 break  # success!
             except TypeError:
                 msg = str(sys.exc_info()[1])
