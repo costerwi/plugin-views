@@ -24,7 +24,12 @@ debug = os.environ.get('DEBUG')
 
 def saferEval(string):  # {{{2
     """Check for trouble before eval"""
-    assert re.search(r'\w\(', string) == None, "Detected possible method call {!r}".format(string)
+    try:
+        assert re.search(r'\w\(', string) == None, "Detected possible method call {!r}".format(string)
+    except AssertionError as e:
+        reply = abaqus.getWarningReply('\n'.join([str(e), "Okay to continue?"]), (abaqus.YES, abaqus.NO))
+        if reply == abaqus.NO:
+            raise  # re-raise
     try:
         value = eval(string)
     except SyntaxError:
@@ -210,11 +215,14 @@ def saveDisplayGroup(xmlElement, viewport):  # {{{2
     displaySet = InstSet(viewport.getActiveElementLabels())
     odbDisplay.setValues(viewCut=viewCut)
 
-    # check for all
-    elset = InstSet(odbData.elementSets[' ALL ELEMENTS'].elements)
-    if elset.issubset(displaySet):
-        dg = ET.SubElement(xmlElement, "all")
-        return
+    # check for special case of all elements
+    try:
+        elset = InstSet(odbData.elementSets[' ALL ELEMENTS'].elements)
+        if elset.issubset(displaySet):
+            dg = ET.SubElement(xmlElement, "all")
+            return
+    except KeyError:
+        pass
 
     # check whole instances
     for instName, elements in displaySet.items():
