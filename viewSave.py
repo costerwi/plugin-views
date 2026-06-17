@@ -36,7 +36,7 @@ def saferEval(string):  # {{{2
         value = string
     return value
 
-def intRanges(intList):
+def intRanges(intList):  # {{{2
     """Yield ranges of continuous sequences within list of integers
 
     >>> list(intRanges([10,11,12,1,2,3,4,17,18,20]))
@@ -57,7 +57,7 @@ def intRanges(intList):
         yield sortedInts[lower], sortedInts[upper]
         lower = upper + 1
 
-def intListToString(intList):
+def intListToString(intList):  # {{{2
     """Convert list of ints to compact string
 
     >>> intListToString([10,11,12,1,2,3,4,17,18,20])
@@ -76,7 +76,7 @@ def intListToString(intList):
             strList.append('%d:%d'%(lower, upper))
     return ' '.join(strList)
 
-def stringToIntList(strList):
+def stringToIntList(strList):  # {{{2
     """Convert string to list of ints
 
     >>> stringToIntList('1:4 10:12 17 18 20')
