@@ -208,12 +208,7 @@ def saveDisplayGroup(xmlElement, viewport):  # {{{2
 
     rootAssembly = abaqus.session.odbs[viewport.odbDisplay.name].rootAssembly
     odbData = abaqus.session.odbData[viewport.odbDisplay.name]
-
-    odbDisplay = viewport.odbDisplay
-    viewCut = odbDisplay.viewCut
-    odbDisplay.setValues(viewCut=OFF)  # turn off temporarily
-    displaySet = InstSet(viewport.getActiveElementLabels())
-    odbDisplay.setValues(viewCut=viewCut)
+    displaySet = InstSet(viewport.getActiveElementLabels(useCut=False, printResults=False))
 
     # check for special case of all elements
     try:
@@ -314,16 +309,6 @@ def saveUserSpectrum(xmlElement, sessionObject):  # {{{2
             xmlColors.set('type', 'argument')
             xmlColors.text = str(spectrum.colors)
 
-def saveAnnotations(xmlElement, userData):  # {{{2
-    "Store current annotations"
-    for ann in userData.annotations.values():
-        if isinstance(ann, abaqus.ArrowType):
-            anElement = ET.SubElement(xmlElement, 'Arrow')
-        else:
-            anElement = ET.SubElement(xmlElement, 'Text')
-        saveObject(anElement, ann)
-
-
 def saveWindowState(xmlElement, viewport):  # {{{2
     "Store whether the viewport is normal or maximized"
     if MAXIMIZED == viewport.windowState:
@@ -344,15 +329,24 @@ def saveColorMode(xmlElement, viewport):  # {{{2
     xmlElement.set('colorMode', name)  # attribute of Viewport
 
 
+def saveDisplayedObject(xmlElement, viewport):  # {{{2
+    obj = viewport.displayedObject
+    if hasattr(obj, 'jobData'):  # odb
+        saveColorMode(xmlElement, viewport)
+        saveObject(ET.SubElement(xmlElement, 'odbDisplay'), viewport.odbDisplay)
+        saveDisplayGroup(xmlElement, viewport)
+    # TODO XYchart
+    # TODO Assembly
+    # TODO Part
+
+
 knownObjects = {    # {{{2 What to save from each element type
     'Session' : [ saveUserSpectrum ],
-    'Odb' : [ 'userData' ],
-    'UserData': [ saveAnnotations ],
     'Text' : [ 'name', 'box', 'justification', 'referencePoint', 'color', 'text', 'backgroundStyle',
         'rotationAngle', 'backgroundColor', 'offset', 'font', 'anchor' ],
-    'Viewport': ['name', saveWindowState, saveColorMode,
-        'origin', 'width', 'height',
-        'viewportAnnotationOptions', 'view', 'odbDisplay', saveDisplayGroup],
+    'Viewport': ['name', saveWindowState, 'origin', 'width', 'height',
+        saveDisplayedObject,
+        'viewportAnnotationOptions', 'view'],
     'View': ['projection',
         'cameraTarget', 'cameraPosition', 'cameraUpVector',
         'width', 'viewOffsetX', 'viewOffsetY'],
@@ -412,11 +406,6 @@ def saveCurrentState(userView, viewports):  # {{{2
     saveObject(userView, abaqus.session)  # save some session data
     for viewport in viewports:
         assert isinstance(viewport, abaqus.ViewportType), "expecting a viewport"
-        if hasattr(viewport.odbDisplay, 'name'):
-            odb = abaqus.session.odbs[viewport.odbDisplay.name]
-            if len(odb.userData.annotations):
-                odbElement = ET.SubElement(userView, 'Odb')
-                saveObject(odbElement, odb)
         vpElement = ET.SubElement(userView, 'Viewport')
         saveObject(vpElement, viewport)
         if MAXIMIZED == viewport.windowState:
@@ -664,26 +653,6 @@ def restoreView(viewName, fileName=None, reprint=False):    # {{{2 Restore the s
     if reprint:
         # Make a new image of this view
         abaqus.session.printToFile(fileName=viewName, format=imageFormat, canvasObjects=updatedViewports)
-
-def restoreAnnotations(viewName):    # {{{2 Restore annotations from the specified viewName
-    """Retrieve the xmlElement for the identified userView.
-
-    Called by viewManagerDB to restore saved annotations.
-    """
-    with ZipFile(databaseName) as database:
-        with database.open(viewName + '.xml') as entry:
-            userView = ET.fromstring(entry.read().decode())
-    assert userView.tag == 'userView', "Not a saved userView"
-    xmlUserData = userView.find('./Odb/userData')
-    if xmlUserData is None:
-        print("View does not contain annotations.")
-        return
-
-    vpObject = abaqus.session.viewports.values()[0]  # current viewport
-    userData = abaqus.session.odbs[vpObject.odbDisplay.name].userData
-    restoreObject(xmlUserData, userData)    # XXX only reads first value
-    for ann in userData.annotations.values():    # TODO only plot new annotations
-        vpObject.plotAnnotation(ann)
 
 def deleteViews(viewNames):   # {{{2 Delete a list of viewNames from the database
     """Remove the specified view names from the database."""

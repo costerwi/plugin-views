@@ -45,12 +45,11 @@ class ViewManagerDB(AFXDataDialog):
     (
         ID_TABLE,
         ID_FILTER,
-        ID_BUTTON_ANNOTATION,
         ID_SELECT_FILE,
         ID_FILE_CHANGED,
         ID_REPRINT,
         ID_LAST
-    ) = range(AFXDataDialog.ID_LAST, AFXDataDialog.ID_LAST + 7)
+    ) = range(AFXDataDialog.ID_LAST, AFXDataDialog.ID_LAST + 6)
 
 
     def __init__(self, form):
@@ -124,8 +123,6 @@ class ViewManagerDB(AFXDataDialog):
 
         btn = self.appendActionButton(self.APPLY)
         btn.setText("Restore View")
-        self.appendActionButton(text="Restore Annotations", tgt=self, sel=self.ID_BUTTON_ANNOTATION)
-        FXMAPFUNC(self, SEL_COMMAND, self.ID_BUTTON_ANNOTATION, ViewManagerDB.onAnnotation)
         self.appendActionButton(self.DISMISS)
         AFXDataDialog.create(self)
 
@@ -221,13 +218,6 @@ class ViewManagerDB(AFXDataDialog):
         "Search field was changed"
         self.filter = sender.getText()
         self.updateTable()
-
-
-    def onAnnotation(self, sender, sel, ptr):
-        "Annotation button was pushed"
-        selected = self.getMode().viewNameKw.getValue()
-        if selected:
-            sendCommand("viewSave.restoreAnnotations(viewName=%r)"%selected)
 
 
     def selectDatabaseFile(self, sender, sel, ptr):
