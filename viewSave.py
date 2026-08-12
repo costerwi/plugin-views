@@ -646,7 +646,16 @@ def restoreView(viewName, fileName=None, reprint=False):    # {{{2 Restore the s
         options = userView.find(optionName)
         if options is None:
             continue
-        restoreObject(options, getattr(abaqus.session, optionName))
+        optionsObject = getattr(abaqus.session, optionName)
+        restoreObject(options, optionsObject)
+        if vpObject.windowState == MAXIMIZED:
+            try:
+                imageSize = list(optionsObject.imageSize)
+                # adjust height for current viewport aspect ratio
+                imageSize[1] = int(imageSize[0]*vpObject.currentHeight/vpObject.currentWidth)
+                optionsObject.setValues(imageSize=imageSize)
+            except AttributeError:
+                pass  # psOptions has paperSize
         break
     else:
         imageFormat = PNG  # default
