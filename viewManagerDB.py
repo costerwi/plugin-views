@@ -61,7 +61,6 @@ class ViewManagerDB(AFXDataDialog):
         self.filter = ''  # Don't filter anything
         self.viewNames = []
 
-
     def create(self):
         """Make the widgets"""
         self.mainframe = FXVerticalFrame(self, FRAME_SUNKEN | LAYOUT_FILL_X | LAYOUT_FILL_Y)
@@ -91,7 +90,8 @@ class ViewManagerDB(AFXDataDialog):
                 sel=self.ID_TABLE,
                 opts=AFXTABLE_NORMAL|AFXTABLE_ROW_MODE)
 #                    AFXTABLE_BROWSE_SELECT|AFXTABLE_ROW_MODE)
-        FXMAPFUNC(self, SEL_CLICKED, self.ID_TABLE, ViewManagerDB.onTable)
+        FXMAPFUNC(self, SEL_CHANGED, self.ID_TABLE, ViewManagerDB.onChanged)
+        FXMAPFUNC(self, SEL_SELECTED, self.ID_TABLE, ViewManagerDB.onSelected)
         FXMAPFUNC(self, SEL_COMMAND, self.ID_TABLE, ViewManagerDB.onCommand)
         self.table.setLeadingRows(numRows=1)
         self.table.setLeadingRowLabels('\t'.join([f.title() for f in ViewRow._fields]))
@@ -192,14 +192,16 @@ class ViewManagerDB(AFXDataDialog):
                 sendCommand("viewSave.setDescription(viewName=%r, description=%r)"%(viewName, value))
 
 
-    def onTable(self, sender, sel, ptr):
-        "Table was clicked - update the keyword or sorting"
+    def onChanged(self, sender, sel, ptr):
+        """Table has changed;update as needed"""
+        self.updateTable()
+
+    def onSelected(self, sender, sel, ptr):
+        """Selection has changed; update the viewNameKw"""
         tableRow = sender.getCurrentRow()
         if tableRow > 0:
             viewName = self.viewNames[tableRow - 1]
             self.getMode().viewNameKw.setValue(viewName)
-        if tableRow == 0:
-            self.updateTable()  # sorting has changed
 
 
     def onReprint(self, sender, sel, ptr):
