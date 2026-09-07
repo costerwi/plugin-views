@@ -17,8 +17,6 @@ class myQuery:
     def __del__(self):
         "unregister the query when this object is deleted"
         self.object.unregisterQuery(self.subroutine)
-    def __repr__(self):
-        return 'myQuery {}'.format(self.subroutine.__doc__)
 
 
 class myAFXTable(AFXTable):
@@ -245,11 +243,12 @@ class ViewManagerDB(AFXDataDialog):
     def show(self):
         "Prepare to show the dialog box"
         # Register query and populate the table
-        try:
-            self.userViewsQuery = \
-                myQuery(session.customData.userViews, self.updateTable)
-        except AttributeError:
-            pass
+        if not hasattr(self, 'userViewsQuery'):
+            try:
+                self.userViewsQuery = \
+                    myQuery(session.customData.userViews, self.updateTable)
+            except AttributeError:
+                pass
         return AFXDataDialog.show(self)
 
 
