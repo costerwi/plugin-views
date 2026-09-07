@@ -649,6 +649,7 @@ def restoreView(viewName, fileName=None, reprint=False):    # {{{2 Restore the s
         optionsObject = getattr(abaqus.session, optionName)
         restoreObject(options, optionsObject)
         if vpObject.windowState == MAXIMIZED:
+            # Maximized viewport might not match aspect ratio of original imageSize
             try:
                 imageSize = list(optionsObject.imageSize)
                 # adjust height for current viewport aspect ratio
@@ -656,6 +657,8 @@ def restoreView(viewName, fileName=None, reprint=False):    # {{{2 Restore the s
                 optionsObject.setValues(imageSize=imageSize)
             except AttributeError:
                 pass  # psOptions has paperSize
+            except TypeError:
+                pass  # imageSize is a SymbolicConstant SIZE_ON_SCREEN
         break
     else:
         imageFormat = PNG  # default
