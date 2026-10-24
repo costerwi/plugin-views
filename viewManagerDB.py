@@ -4,6 +4,7 @@ Carl Osterwisch, June 2006
 """
 
 import re
+
 from abaqusGui import *
 from viewsCommon import ViewRow, databaseName
 
@@ -18,7 +19,6 @@ class myQuery:
         "unregister the query when this object is deleted"
         self.object.unregisterQuery(self.subroutine)
 
-
 class myAFXTable(AFXTable):
     def deleteRows(self, startRow, numRows=1, notify=FALSE):
         " Notify the kernel that these views are no longer wanted. "
@@ -29,7 +29,6 @@ class myAFXTable(AFXTable):
             sendCommand("viewSave.deleteViews(%r)"%names)
         else:
             AFXTable.deleteRows(self, startRow, numRows, notify)
-
 
 ###########################################################################
 # Dialog box
@@ -48,7 +47,6 @@ class ViewManagerDB(AFXDataDialog):
         ID_REPRINT,
         ID_LAST
     ) = range(AFXDataDialog.ID_LAST, AFXDataDialog.ID_LAST + 6)
-
 
     def __init__(self, form):
         # Construct the base class.
@@ -89,7 +87,6 @@ class ViewManagerDB(AFXDataDialog):
                 tgt=self,
                 sel=self.ID_TABLE,
                 opts=AFXTABLE_NORMAL|AFXTABLE_ROW_MODE)
-#                    AFXTABLE_BROWSE_SELECT|AFXTABLE_ROW_MODE)
         FXMAPFUNC(self, SEL_CLICKED, self.ID_TABLE, ViewManagerDB.onClicked)
         FXMAPFUNC(self, SEL_SELECTED, self.ID_TABLE, ViewManagerDB.onSelected)
         FXMAPFUNC(self, SEL_COMMAND, self.ID_TABLE, ViewManagerDB.onCommand)
@@ -124,14 +121,12 @@ class ViewManagerDB(AFXDataDialog):
         self.appendActionButton(self.DISMISS)
         AFXDataDialog.create(self)
 
-
     def updateTable(self):
         "Read view settings from customData.userViews registered list"
-        sortColumn = self.table.getCurrentSortColumn()
-        
         # Collect filtered table data
         filtered = []
         filterre = re.compile(self.filter, re.IGNORECASE)
+        sortColumn = self.table.getCurrentSortColumn()
         try:
             for row in session.customData.userViews:
                 row = ViewRow(*row)  # interpret as ViewRow
@@ -159,9 +154,10 @@ class ViewManagerDB(AFXDataDialog):
                     notify=FALSE)
 
         # Update table widget
-        selected = self.form.viewNameKw.getValue()
+        viewName = self.form.viewNameKw.getValue()
+        selected = None
         for tableRow, (_, row) in enumerate(filtered, 1):
-            if row.name == selected:
+            if row.name == viewName:
                 selected = tableRow
             self.table.deselectRow(tableRow)
             for col, itemtext in enumerate(row):
@@ -171,13 +167,12 @@ class ViewManagerDB(AFXDataDialog):
                         valueText=str(itemtext))
         self.viewNames = [row.name for _, row in filtered]
 
-        if isinstance(selected, int):
+        if selected is not None:
             self.table.selectRow(selected)
             self.table.makeRowVisible(selected)
 
-
     def onCommand(self, sender, sel, ptr):
-        " Called for rename "
+        """Called for rename"""
         tableRow = self.table.getCurrentRow()
         if tableRow > 0:
             viewName = self.viewNames[tableRow - 1]
@@ -203,7 +198,6 @@ class ViewManagerDB(AFXDataDialog):
             viewName = self.viewNames[tableRow - 1]
             self.getMode().viewNameKw.setValue(viewName)
 
-
     def onReprint(self, sender, sel, ptr):
         "Reprint selected views"
         reprint = []
@@ -213,12 +207,10 @@ class ViewManagerDB(AFXDataDialog):
         for viewName in reprint:
             sendCommand("viewSave.restoreView({!r}, reprint=True)".format(viewName))
 
-
     def onFilter(self, sender, sel, ptr):
         "Search field was changed"
         self.filter = sender.getText()
         self.updateTable()
-
 
     def selectDatabaseFile(self, sender, sel, ptr):
         """Construct database file selection dialog"""
@@ -233,14 +225,12 @@ class ViewManagerDB(AFXDataDialog):
             self.fileDialog.create()
         self.fileDialog.showModal()
 
-
     def onFileChanged(self, sender, sel, ptr):
         """A new database file was selected"""
         if not hasattr(self, 'userViewsQuery'):
             return
         filename = self.form.databaseKw.getValue()
         sendCommand('viewSave.scanDatabase({!r})'.format(filename))
-
 
     def show(self):
         "Prepare to show the dialog box"
@@ -253,13 +243,11 @@ class ViewManagerDB(AFXDataDialog):
                 pass
         return AFXDataDialog.show(self)
 
-
     def hide(self):
         "Called to remove the dialog box"
         if hasattr(self, 'userViewsQuery'):
             del self.userViewsQuery
         return AFXDataDialog.hide(self)
-
 
 ###########################################################################
 # Form definition
@@ -284,8 +272,5 @@ class ViewManagerForm(AFXForm):
                 isRequired=FALSE,
                 defaultValue=databaseName)
 
-
     def getFirstDialog(self):
         return ViewManagerDB(self)
-
-
