@@ -409,7 +409,14 @@ def saveCurrentState(userView, viewports):  # {{{2
         vpElement = ET.SubElement(userView, 'Viewport')
         saveObject(vpElement, viewport)
         if MAXIMIZED == viewport.windowState:
-            break  # this will obstruct any other viewports
+            break  # this viewport will obstruct any other viewports
+    vps = userView.findall('Viewport')
+    if len(vps) == 1:
+        # Do not save Viewport.origin for single viewport layouts
+        vpElement = vps[0]
+        origin = vpElement.find('origin')
+        if origin is not None:
+            vpElement.remove(origin)
     return userView
 
 
