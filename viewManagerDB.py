@@ -160,8 +160,7 @@ class ViewManagerDB(AFXDataDialog):
 
         # Update table widget
         selected = self.form.viewNameKw.getValue()
-        for i, (_, row) in enumerate(filtered):
-            tableRow = i + 1
+        for tableRow, (_, row) in enumerate(filtered, 1):
             if row.name == selected:
                 selected = tableRow
             self.table.deselectRow(tableRow)
