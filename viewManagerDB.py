@@ -90,7 +90,7 @@ class ViewManagerDB(AFXDataDialog):
                 sel=self.ID_TABLE,
                 opts=AFXTABLE_NORMAL|AFXTABLE_ROW_MODE)
 #                    AFXTABLE_BROWSE_SELECT|AFXTABLE_ROW_MODE)
-        FXMAPFUNC(self, SEL_CHANGED, self.ID_TABLE, ViewManagerDB.onChanged)
+        FXMAPFUNC(self, SEL_CLICKED, self.ID_TABLE, ViewManagerDB.onClicked)
         FXMAPFUNC(self, SEL_SELECTED, self.ID_TABLE, ViewManagerDB.onSelected)
         FXMAPFUNC(self, SEL_COMMAND, self.ID_TABLE, ViewManagerDB.onCommand)
         self.table.setLeadingRows(numRows=1)
@@ -190,10 +190,11 @@ class ViewManagerDB(AFXDataDialog):
             elif field == 'description':
                 sendCommand("viewSave.setDescription(viewName=%r, description=%r)"%(viewName, value))
 
-
-    def onChanged(self, sender, sel, ptr):
-        """Table has changed;update as needed"""
-        self.updateTable()
+    def onClicked(self, sender, sel, ptr):
+        """Table has been clicked"""
+        tableRow = sender.getCurrentRow()
+        if tableRow == 0:  # sorting has changed
+            self.updateTable()
 
     def onSelected(self, sender, sel, ptr):
         """Selection has changed; update the viewNameKw"""
