@@ -556,48 +556,43 @@ def restoreObject(xmlElement, abaqusObject):  # {{{2
 
 # {{{1 Database functions #########################################
 
-def newView(viewName, viewports=[], imageFormat=PNG):    # {{{2
-    "Add a new userView to the xml document"
-
+def newView(viewports=[]):    # {{{2
+    """Create a new userView for the given viewports"""
     userView = ET.Element('userView')
     userView.set('abaqusViewer',
             '%s.%s-%s'%(abaqus.majorVersion, abaqus.minorVersion,
                 abaqus.updateVersion))
     userView.set('version', str(viewsCommon.__version__))
     saveCurrentState(userView, viewports)
+    return userView
 
-    # Save print options for the selected image format
-    optionsDict = {PNG: 'pngOptions', SVG: 'svgOptions',
-            TIFF: 'tiffOptions', PS: 'psOptions', EPS: 'epsOptions'}
-    optionName = optionsDict.get(imageFormat)
-    if optionName:
-        options = ET.SubElement(userView, optionName)
-        saveObject(options, getattr(abaqus.session, optionName))
-
-    # Find some initial description for the view
-    description = ''
-    for row in abaqus.session.customData.userViews:
-        if row.name == viewName:
-            description = row.description
-            deleteViews([viewName])
-            break
-    else:
-        description = []
-        for odbDisplay in userView.findall('Viewport/odbDisplay'):
-            odbDescription = []
-            primary = odbDisplay.find('setPrimaryVariable/variableLabel')
-            if primary is not None:
-                odbDescription.append(saferEval(primary.text))
-            refinement = odbDisplay.find('setPrimaryVariable/refinement')
-            if refinement is not None:
-                odbDescription.append(saferEval(refinement.text)[1])
-            plotState = odbDisplay.find('display/plotState')
-            if plotState is not None:
-                for ps in saferEval(plotState.text):
-                    odbDescription.append(str(ps).replace('_', ' ').lower())
-            description.append(' '.join(odbDescription))
-        description = ', '.join(description)
-    userView.set('description', description)
+def saveView(viewName, userView):  # {{{2
+    """Store the userView to database using the given viewName"""
+    description = userView.get('description', '')
+    if not description:
+        for row in abaqus.session.customData.userViews:
+            if row.name == viewName:
+                description = row.description
+                deleteViews([viewName])  # This viewName will replace the old one
+                break
+        else:
+            # Make a description
+            description = []
+            for odbDisplay in userView.findall('Viewport/odbDisplay'):
+                odbDescription = []
+                primary = odbDisplay.find('setPrimaryVariable/variableLabel')
+                if primary is not None:
+                    odbDescription.append(saferEval(primary.text))
+                refinement = odbDisplay.find('setPrimaryVariable/refinement')
+                if refinement is not None:
+                    odbDescription.append(saferEval(refinement.text)[1])
+                plotState = odbDisplay.find('display/plotState')
+                if plotState is not None:
+                    for ps in saferEval(plotState.text):
+                        odbDescription.append(str(ps).replace('_', ' ').lower())
+                description.append(' '.join(odbDescription))
+            description = ', '.join(description)
+        userView.set('description', description)
 
     # Append to database
     now = datetime.now()
@@ -785,6 +780,7 @@ def init(): # {{{2
 
     if not hasattr(customKernel.RegisteredList, "clear"):
         def clear(self):
+            """Remove all elements from the list"""
             while len(self) > 0:
                 self.pop(0)
         customKernel.RegisteredList.clear = clear
@@ -795,7 +791,16 @@ def init(): # {{{2
         viewName, _ = os.path.splitext(relpath)
         viewports = kws['canvasObjects']
         imageFormat = kws['format']
-        newView(viewName, viewports, imageFormat)
+        userView = newView(viewports)
+
+        # Save print options for the selected image format
+        optionsDict = {PNG: 'pngOptions', SVG: 'svgOptions',
+                TIFF: 'tiffOptions', PS: 'psOptions', EPS: 'epsOptions'}
+        optionName = optionsDict.get(imageFormat)
+        if optionName:
+            options = ET.SubElement(userView, optionName)
+            saveObject(options, getattr(abaqus.session, optionName))
+        saveView(viewName, userView)
 
     # Add to session.customData
     if not hasattr(abaqus.session.customData, "userViews"):
