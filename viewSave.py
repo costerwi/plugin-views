@@ -92,6 +92,23 @@ def stringToIntList(strList):  # {{{2
             intList.extend(range(int(lower), int(upper) + 1))
     return intList
 
+def formatViewRow(zipinfo, userView):  # {{{2
+    """Create a ViewRow to be added to customData.userViews"""
+    name, ext = os.path.splitext(zipinfo.filename)
+    odbName = ''
+    stepName = ''
+    odbDisplay = userView.find('Viewport/odbDisplay')
+    if odbDisplay is not None:
+        odbName = odbDisplay.get('name', odbName)
+        stepName = odbDisplay.get('step', stepName)
+    return viewsCommon.ViewRow(
+        name,
+        "{}-{:02}-{:02} {:02}:{:02}:{:02}".format(*zipinfo.date_time),
+        odbName,
+        stepName,
+        userView.get('description', ''),
+        )
+
 class InstSet(dict):  # {{{2
     """Class for working with sets defined across multiple instances
 
@@ -536,25 +553,6 @@ def restoreObject(xmlElement, abaqusObject):  # {{{2
                     break # failed for other reason
 
     return (xmlElement.text or '').strip()
-
-# {{{1 File access functions ##################################################
-
-def formatViewRow(zipinfo, userView):  # {{{2
-    """Create a ViewRow to be added to customData.userViews"""
-    name, ext = os.path.splitext(zipinfo.filename)
-    odbName = ''
-    stepName = ''
-    odbDisplay = userView.find('Viewport/odbDisplay')
-    if odbDisplay is not None:
-        odbName = odbDisplay.get('name', odbName)
-        stepName = odbDisplay.get('step', stepName)
-    return viewsCommon.ViewRow(
-        name,
-        "{}-{:02}-{:02} {:02}:{:02}:{:02}".format(*zipinfo.date_time),
-        odbName,
-        stepName,
-        userView.get('description', ''),
-        )
 
 # {{{1 Database functions #########################################
 
