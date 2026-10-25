@@ -131,7 +131,7 @@ class ViewManagerDB(AFXDataDialog):
             for row in session.customData.userViews:
                 row = ViewRow(*row)  # interpret as ViewRow
                 if filterre.search('\t'.join(row)):
-                    filtered.append( (row[sortColumn].lower(), row) )
+                    filtered.append( (row[sortColumn].lower(), row.name.lower(), row) )
         except AttributeError:
             return
 
@@ -139,8 +139,16 @@ class ViewManagerDB(AFXDataDialog):
         filtered.sort()
         if self.table.getColumnSortOrder(sortColumn) == AFXTable.SORT_DESCENDING:
             filtered.reverse()
+        filtered = [row for _, _, row in filtered]
 
-        # Adjust table widget size
+        # Collect set of currently selected view names
+        selected = {
+            self.table.getItemValue(tableRow, 0)
+            for tableRow in range(1, self.table.getNumRows())
+            if self.table.isAnyItemInRowSelected(tableRow)
+            }
+
+        # Adjust table widget number of rows
         diff = len(filtered) + 1 - self.table.getNumRows()
         if diff > 0:
             self.table.insertRows(
@@ -155,21 +163,17 @@ class ViewManagerDB(AFXDataDialog):
 
         # Update table widget
         viewName = self.form.viewNameKw.getValue()
-        selected = None
-        for tableRow, (_, row) in enumerate(filtered, 1):
-            if row.name == viewName:
-                selected = tableRow
-            self.table.deselectRow(tableRow)
+        for tableRow, row in enumerate(filtered, 1):
             for col, itemtext in enumerate(row):
                 self.table.setItemValue(
                         row=tableRow,
                         column=col,
                         valueText=str(itemtext))
-        self.viewNames = [row.name for _, row in filtered]
-
-        if selected is not None:
-            self.table.selectRow(selected)
-            self.table.makeRowVisible(selected)
+            if row.name in selected:
+                self.table.selectRow(tableRow)
+            else:
+                self.table.deselectRow(tableRow)
+        self.viewNames = [row.name for row in filtered]
 
     def onCommand(self, sender, sel, ptr):
         """Called for rename"""
